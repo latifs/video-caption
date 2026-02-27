@@ -1,0 +1,16 @@
+{
+  "name": "video-caption-app",
+  "private": true,
+  "scripts": {
+    "dev:mobile": "pnpm --filter mobile start",
+    "dev:api": "pnpm --filter api dev",
+    "dev:worker": "pnpm --filter worker dev",
+    "build:worker": "pnpm --filter worker build"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "ffmpeg-static",
+      "sharp"
+    ]
+  }
+}
