@@ -1,133 +1,172 @@
 # Video Caption App
 
-A monorepo for automatically adding captions to videos. Built with Expo (mobile), Next.js (API), and Express (Cloud Run worker).
-
-## Project Structure
-
-```
-video-caption-app/
-├── apps/
-│   ├── mobile/          # Expo 55 + Expo Router (React Native)
-│   ├── api/             # Next.js 16 API (App Router)
-│   └── worker/          # Express server for Google Cloud Run
-├── packages/
-│   └── types/           # Shared TypeScript types
-├── pnpm-workspace.yaml
-├── .npmrc
-└── package.json
-```
-
-### `apps/mobile`
-
-Expo React Native app with Expo Router. Screens live in `src/app/`. Uses Supabase for auth/storage and communicates with the API.
-
-### `apps/api`
-
-Next.js API server with route handlers at `src/app/api/`. Orchestrates video processing between the mobile client and the Cloud Run worker.
-
-**Routes:**
-- `GET /api/health` — health check
-- `POST /api/process` — trigger video processing (not yet implemented)
-
-### `apps/worker`
-
-Express server designed for Google Cloud Run. Handles video processing tasks (captioning via OpenAI, video manipulation via ffmpeg).
-
-**Endpoints:**
-- `POST /process` — process a video
-
-### `packages/types`
-
-Shared TypeScript types used across workspaces. Exports raw `.ts` source (no build step needed — all consumers use bundlers).
+Upload short videos and get AI-generated captions burned in automatically.
 
 ## Prerequisites
 
-- **Node.js** v20+ (v24.4.0 recommended)
-- **pnpm** v10+
-- **Docker** (for worker container builds)
-- **Expo Go** app on your phone (for mobile development)
+- Node.js 20+
+- [pnpm](https://pnpm.io/) 10+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for local Supabase)
+- [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started)
+- Xcode 16+ with an iOS simulator runtime (for mobile development)
 
-## Getting Started
+## Setup
 
 ```bash
-# Install all dependencies
+# Install dependencies
 pnpm install
 
-# Copy environment files
+# Start local Supabase (requires Docker)
+pnpm supabase:start
+
+# Generate Prisma client
+pnpm db:generate
+
+# Run database migrations
+pnpm db:deploy
+
+# Apply auth triggers + storage policies
+pnpm db:triggers
+```
+
+Copy environment files and fill in any missing values:
+
+```bash
 cp apps/mobile/.env.example apps/mobile/.env
 cp apps/api/.env.local.example apps/api/.env.local
 cp apps/worker/.env.example apps/worker/.env
 ```
 
-Fill in the environment variables in each `.env` file before running the apps.
+Local defaults are pre-configured to work with `supabase start`.
 
-## Development
+## Running Locally
+
+You need three terminals — one for each service:
+
+### 1. API (Next.js)
 
 ```bash
-# Start the mobile app (Expo)
-pnpm dev:mobile
-
-# Start the API server (Next.js on port 3000)
 pnpm dev:api
+```
 
-# Start the worker (Express on port 8080)
+Runs on http://localhost:3000
+
+### 2. Worker (Express)
+
+```bash
 pnpm dev:worker
 ```
 
-## Building
+Runs on http://localhost:8080
+
+### 3. Mobile (Expo — iOS Simulator)
+
+The mobile app uses a **development build** (not Expo Go) so that all native modules work correctly.
+
+**First time setup:**
 
 ```bash
-# Build the worker (TypeScript → JavaScript)
-pnpm build:worker
-
-# Build the API (Next.js production build)
-pnpm --filter api build
+cd apps/mobile
+npx expo prebuild --platform ios --clean
+npx expo run:ios
 ```
 
-## Docker (Worker)
+This generates the native iOS project and builds the app on the simulator. The first build takes a few minutes.
+
+**Subsequent runs:**
 
 ```bash
-# Build the image
-docker build -t video-caption-worker apps/worker/
+cd apps/mobile
+npx expo run:ios
+```
 
-# Run locally
-docker run -p 8080:8080 video-caption-worker
+If the app is already built and you just need to start the Metro bundler (e.g. after a restart):
 
-# Test
-curl -X POST http://localhost:8080/process
+```bash
+cd apps/mobile
+npx expo start --clear
+```
+
+Then press `i` to open on the iOS simulator.
+
+Code changes hot-reload instantly. You only need to re-run `npx expo prebuild --platform ios --clean` when you:
+
+- Add or remove a package with native code
+- Change plugin config in `app.json`
+
+## Project Structure
+
+```
+apps/
+  mobile/     Expo React Native app
+  api/        Next.js API (route handlers)
+  worker/     Express service for video processing (Cloud Run)
+packages/
+  types/      Shared TypeScript types
+prisma/       Database schema and migrations
+sql/          Auth triggers and storage policies
+```
+
+## API Routes
+
+| Method | Path              | Description              |
+| ------ | ----------------- | ------------------------ |
+| `GET`  | `/api/health`     | Health check             |
+| `POST` | `/api/process`    | Trigger video processing |
+| `GET`  | `/api/videos`     | List user's videos       |
+| `GET`  | `/api/videos/:id` | Get video status         |
+
+## Database
+
+```bash
+pnpm db:migrate    # Create a new migration (dev)
+pnpm db:deploy     # Apply pending migrations
+pnpm db:triggers   # Apply auth triggers + storage policies
+pnpm db:studio     # Open Prisma Studio GUI
+pnpm db:generate   # Regenerate Prisma client
 ```
 
 ## Environment Variables
 
 ### `apps/mobile/.env`
 
-| Variable | Description |
-|---|---|
-| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| Variable                        | Description            |
+| ------------------------------- | ---------------------- |
+| `EXPO_PUBLIC_SUPABASE_URL`      | Supabase project URL   |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
-| `EXPO_PUBLIC_API_URL` | Next.js API base URL |
+| `EXPO_PUBLIC_API_URL`           | Next.js API base URL   |
 
 ### `apps/api/.env.local`
 
-| Variable | Description |
-|---|---|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
-| `WORKER_URL` | Cloud Run worker URL |
-| `WORKER_SECRET` | Shared secret for worker auth |
+| Variable                    | Description                   |
+| --------------------------- | ----------------------------- |
+| `DATABASE_URL`              | Postgres connection string    |
+| `SUPABASE_URL`              | Supabase project URL          |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key     |
+| `WORKER_URL`                | Cloud Run worker URL          |
+| `WORKER_SECRET`             | Shared secret for worker auth |
 
 ### `apps/worker/.env`
 
-| Variable | Description |
-|---|---|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
-| `OPENAI_API_KEY` | OpenAI API key for transcription |
-| `WORKER_SECRET` | Shared secret for API auth |
+| Variable                    | Description                      |
+| --------------------------- | -------------------------------- |
+| `DATABASE_URL`              | Postgres connection string       |
+| `SUPABASE_URL`              | Supabase project URL             |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key        |
+| `OPENAI_API_KEY`            | OpenAI API key for transcription |
+| `WORKER_SECRET`             | Shared secret for API auth       |
+
+## Docker (Worker)
+
+```bash
+docker build -t video-caption-worker apps/worker/
+docker run -p 8080:8080 video-caption-worker
+```
 
 ## Tech Stack
 
-- **Mobile:** Expo, React Native, Expo Router, Supabase JS
-- **API:** Next.js, Supabase JS, Zod
-- **Worker:** Express, OpenAI, fluent-ffmpeg, Supabase JS
-- **Shared:** TypeScript, pnpm workspaces
+- **Mobile:** Expo 55, React Native, Expo Router, Supabase JS
+- **API:** Next.js 16, Prisma 7, Supabase JS, Zod
+- **Worker:** Express, Prisma 7, OpenAI, fluent-ffmpeg, Supabase JS
+- **Database:** PostgreSQL (Supabase), Prisma ORM
+- **Infra:** pnpm workspaces, Docker, Cloud Run

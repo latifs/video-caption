@@ -7,6 +7,16 @@
     "icon": "./assets/images/icon.png",
     "scheme": "video-caption-app",
     "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.videocaptionapp.mobile",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "We need access to your photo library to select videos for captioning."
+      }
+    },
+    "android": {
+      "package": "com.videocaptionapp.mobile"
+    },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"

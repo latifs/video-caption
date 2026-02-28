@@ -5,12 +5,29 @@
     "dev:mobile": "pnpm --filter mobile start",
     "dev:api": "pnpm --filter api dev",
     "dev:worker": "pnpm --filter worker dev",
-    "build:worker": "pnpm --filter worker build"
+    "build:worker": "cp -r prisma apps/worker/prisma && cp prisma.config.ts apps/worker/ && pnpm --filter worker build",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:deploy": "prisma migrate deploy",
+    "db:triggers": "node sql/run-sql.mjs deploy"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "ffmpeg-static",
-      "sharp"
+      "sharp",
+      "@prisma/engines",
+      "prisma"
     ]
+  },
+  "devDependencies": {
+    "prisma": "^7.4.2"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.4.2",
+    "@prisma/client": "^7.4.2"
   }
 }
