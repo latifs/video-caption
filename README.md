@@ -153,7 +153,7 @@ pnpm db:generate   # Regenerate Prisma client
 | `DATABASE_URL`              | Postgres connection string       |
 | `SUPABASE_URL`              | Supabase project URL             |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key        |
-| `OPENAI_API_KEY`            | OpenAI API key for transcription |
+| `REPLICATE_API_TOKEN`       | Replicate API token for WhisperX |
 | `WORKER_SECRET`             | Shared secret for API auth       |
 
 ## Docker (Worker)
@@ -167,6 +167,6 @@ docker run -p 8080:8080 video-caption-worker
 
 - **Mobile:** Expo 55, React Native, Expo Router, Supabase JS
 - **API:** Next.js 16, Prisma 7, Supabase JS, Zod
-- **Worker:** Express, Prisma 7, OpenAI, fluent-ffmpeg, Supabase JS
+- **Worker:** Express, Prisma 7, WhisperX (via Replicate), fluent-ffmpeg, Supabase JS
 - **Database:** PostgreSQL (Supabase), Prisma ORM
 - **Infra:** pnpm workspaces, Docker, Cloud Run

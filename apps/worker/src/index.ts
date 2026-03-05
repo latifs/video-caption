@@ -6,8 +6,11 @@ import path from "path";
 import { supabase } from "./lib/supabase";
 import { prisma, Prisma } from "./lib/prisma";
 import { extractAudio, burnSubtitles } from "./lib/ffmpeg";
-import { transcribeAudio } from "./lib/transcribe";
-import { buildCaptionData } from "./lib/caption-data";
+import {
+  buildCaptionDataFromWhisperX,
+  getWhisperXDuration,
+} from "./lib/caption-data";
+import { alignWithWhisperX } from "./lib/whisperx";
 import { captionDataToSrt } from "./lib/caption-srt";
 import type { CaptionData } from "./types/caption";
 
@@ -18,6 +21,7 @@ const WORKER_SECRET = process.env.WORKER_SECRET!;
 
 async function processVideo(videoId: string, rawUrl: string): Promise<void> {
   const tmpDir = path.join("/tmp", videoId);
+
   try {
     fs.mkdirSync(tmpDir, { recursive: true });
 
@@ -31,18 +35,20 @@ async function processVideo(videoId: string, rawUrl: string): Promise<void> {
     // Extract audio
     await extractAudio(inputPath, audioPath);
 
-    // Transcribe with word-level timestamps
-    const result = await transcribeAudio(audioPath);
+    // Transcribe + align with WhisperX (accurate word-level timestamps)
+    console.log(`[${videoId}] Running WhisperX via Replicate`);
+    const audioBuffer = fs.readFileSync(audioPath);
+    const whisperxResult = await alignWithWhisperX(audioBuffer);
+    const captionData = buildCaptionDataFromWhisperX(whisperxResult);
+    const durationSec = getWhisperXDuration(whisperxResult);
+    console.log(`[${videoId}] WhisperX succeeded`);
 
-    // Build structured caption data
-    const captionData = buildCaptionData(result);
-
-    // Persist to DB — pipeline stops here (no auto-burn)
+    // Persist to DB
     await prisma.video.update({
       where: { id: videoId },
       data: {
         status: "transcribed",
-        durationSec: result.duration,
+        durationSec,
         captionData: captionData as unknown as Prisma.InputJsonValue,
       },
     });
