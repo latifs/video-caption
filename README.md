@@ -2,6 +2,42 @@
 
 Upload short videos and get AI-generated captions burned in automatically.
 
+## How It Works
+
+Upload a short video from your phone, get AI-generated captions with accurate word-level timestamps, edit the text inline, then export a final video with subtitles burned in.
+
+```
+┌─────────────┐       ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+│   Mobile    │──────▶│     API     │──────▶│   Worker    │──────▶│  Replicate  │
+│   (Expo)    │       │  (Next.js)  │       │  (Express)  │       │ (WhisperX)  │
+└─────────────┘       └─────────────┘       └─────────────┘       └─────────────┘
+       │                     │                     │
+       │                     │                     │
+       ▼                     ▼                     ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              Supabase                                          │
+│                     Auth · Storage · PostgreSQL                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Mobile (Expo)** — Upload videos, browse/edit captions, trigger export
+- **API (Next.js)** — Authentication, orchestration, database access via Prisma
+- **Worker (Express / Cloud Run)** — Heavy processing: audio extraction (ffmpeg), transcription (WhisperX via Replicate), subtitle burning (ffmpeg)
+- **Replicate** — Runs the WhisperX model (Whisper large-v3 + wav2vec2 forced alignment) on GPU for accurate per-word timestamps
+- **Supabase** — Auth (JWT), Storage (raw + processed videos), PostgreSQL (video records, caption data)
+
+### Transcription Pipeline
+
+1. Mobile uploads video → Supabase Storage
+2. Mobile calls `POST /api/process` → API creates DB record, calls Worker
+3. Worker downloads video, extracts audio with ffmpeg
+4. Worker sends audio to WhisperX on Replicate → returns word-level timestamps
+5. Worker saves caption data to DB → status: `transcribed`
+6. Mobile polls `GET /api/videos/:id`, displays editable captions
+7. User edits captions (`PATCH /api/videos/:id/speech`)
+8. User triggers export (`POST /api/videos/:id/export`)
+9. Worker burns subtitles into video with ffmpeg → uploads to Supabase Storage
+
 ## Prerequisites
 
 - Node.js 20+
@@ -40,6 +76,8 @@ cp apps/worker/.env.example apps/worker/.env
 Local defaults are pre-configured to work with `supabase start`.
 
 ## Running Locally
+
+> **Before starting:** Make sure Docker Desktop is running. The local Supabase instance runs in Docker containers. If you haven't already, run `pnpm supabase:start` first (see Setup above).
 
 You need three terminals — one for each service:
 
@@ -109,12 +147,16 @@ sql/          Auth triggers and storage policies
 
 ## API Routes
 
-| Method | Path              | Description              |
-| ------ | ----------------- | ------------------------ |
-| `GET`  | `/api/health`     | Health check             |
-| `POST` | `/api/process`    | Trigger video processing |
-| `GET`  | `/api/videos`     | List user's videos       |
-| `GET`  | `/api/videos/:id` | Get video status         |
+| Method   | Path                              | Description                     |
+| -------- | --------------------------------- | ------------------------------- |
+| `GET`    | `/api/health`                     | Health check                    |
+| `POST`   | `/api/process`                    | Trigger video processing        |
+| `GET`    | `/api/videos`                     | List user's videos              |
+| `GET`    | `/api/videos/:id`                 | Get video status & caption data |
+| `POST`   | `/api/videos/:id/export`          | Trigger subtitle burn & export  |
+| `PATCH`  | `/api/videos/:id/speech`          | Edit caption word text          |
+| `POST`   | `/api/videos/:id/overlays`        | Add a text overlay              |
+| `DELETE`  | `/api/videos/:id/overlays/:overlayId` | Remove an overlay          |
 
 ## Database
 
