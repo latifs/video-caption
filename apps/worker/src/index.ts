@@ -4,10 +4,12 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { supabase } from "./lib/supabase";
-import { prisma } from "./lib/prisma";
+import { prisma, Prisma } from "./lib/prisma";
 import { extractAudio, burnSubtitles } from "./lib/ffmpeg";
 import { transcribeAudio } from "./lib/transcribe";
-import { segmentsToSrt } from "./lib/srt";
+import { buildCaptionData } from "./lib/caption-data";
+import { captionDataToSrt } from "./lib/caption-srt";
+import type { CaptionData } from "./types/caption";
 
 const app = express();
 app.use(express.json());
@@ -21,8 +23,6 @@ async function processVideo(videoId: string, rawUrl: string): Promise<void> {
 
     const inputPath = path.join(tmpDir, "input.mp4");
     const audioPath = path.join(tmpDir, "audio.mp3");
-    const srtPath = path.join(tmpDir, "subtitles.srt");
-    const outputPath = path.join(tmpDir, "output.mp4");
 
     // Download raw video
     const response = await axios.get(rawUrl, { responseType: "arraybuffer" });
@@ -31,11 +31,63 @@ async function processVideo(videoId: string, rawUrl: string): Promise<void> {
     // Extract audio
     await extractAudio(inputPath, audioPath);
 
-    // Transcribe
-    const segments = await transcribeAudio(audioPath);
+    // Transcribe with word-level timestamps
+    const result = await transcribeAudio(audioPath);
 
-    // Generate SRT
-    const srtContent = segmentsToSrt(segments);
+    // Build structured caption data
+    const captionData = buildCaptionData(result);
+
+    // Persist to DB — pipeline stops here (no auto-burn)
+    await prisma.video.update({
+      where: { id: videoId },
+      data: {
+        status: "transcribed",
+        durationSec: result.duration,
+        captionData: captionData as unknown as Prisma.InputJsonValue,
+      },
+    });
+  } catch (error) {
+    console.error(`Processing failed for ${videoId}:`, error);
+    await prisma.video.update({
+      where: { id: videoId },
+      data: { status: "failed" },
+    });
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+async function exportVideo(videoId: string): Promise<void> {
+  const tmpDir = path.join("/tmp", `${videoId}-export`);
+  try {
+    fs.mkdirSync(tmpDir, { recursive: true });
+
+    // Read video record
+    const video = await prisma.video.findUniqueOrThrow({
+      where: { id: videoId },
+    });
+
+    const captionData = video.captionData as unknown as CaptionData;
+    if (!captionData) throw new Error("No caption data found");
+
+    // Set exporting status
+    await prisma.video.update({
+      where: { id: videoId },
+      data: { status: "exporting" },
+    });
+
+    const inputPath = path.join(tmpDir, "input.mp4");
+    const srtPath = path.join(tmpDir, "subtitles.srt");
+    const outputPath = path.join(tmpDir, "output.mp4");
+
+    // Download raw video
+    const response = await axios.get(video.rawUrl, {
+      responseType: "arraybuffer",
+    });
+    fs.writeFileSync(inputPath, Buffer.from(response.data));
+
+    // Convert caption data to SRT
+    const srtContent = captionDataToSrt(captionData);
     fs.writeFileSync(srtPath, srtContent);
 
     // Burn subtitles
@@ -58,13 +110,12 @@ async function processVideo(videoId: string, rawUrl: string): Promise<void> {
       .from("videos")
       .getPublicUrl(storagePath);
 
-    // Update DB with completed status
     await prisma.video.update({
       where: { id: videoId },
       data: { status: "completed", processedUrl: urlData.publicUrl },
     });
   } catch (error) {
-    console.error(`Processing failed for ${videoId}:`, error);
+    console.error(`Export failed for ${videoId}:`, error);
     await prisma.video.update({
       where: { id: videoId },
       data: { status: "failed" },
@@ -91,6 +142,25 @@ app.post("/process", (req, res) => {
   res.json({ status: "accepted" });
 
   processVideo(videoId, rawUrl);
+});
+
+app.post("/export", (req, res) => {
+  const { videoId, secret } = req.body;
+
+  if (secret !== WORKER_SECRET) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  if (!videoId) {
+    res.status(400).json({ error: "Missing videoId" });
+    return;
+  }
+
+  // Respond immediately, export in background
+  res.json({ status: "accepted" });
+
+  exportVideo(videoId);
 });
 
 const PORT = Number(process.env.PORT) || 8080;

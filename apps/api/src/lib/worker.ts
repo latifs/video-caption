@@ -10,3 +10,10 @@ export async function callWorker(
     secret: process.env.WORKER_SECRET!,
   });
 }
+
+export async function callWorkerExport(videoId: string): Promise<void> {
+  await axios.post(`${process.env.WORKER_URL!}/export`, {
+    videoId,
+    secret: process.env.WORKER_SECRET!,
+  });
+}

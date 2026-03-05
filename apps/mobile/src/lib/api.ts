@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { CaptionData, Overlay } from "types";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL!;
 
@@ -23,12 +24,75 @@ export async function listVideos(
   return data;
 }
 
+export interface VideoStatusResponse {
+  id: string;
+  rawUrl: string;
+  processedUrl: string | null;
+  status: string;
+  durationSec: number | null;
+  captionData: CaptionData | null;
+}
+
 export async function getVideoStatus(
   videoId: string,
   accessToken: string
-): Promise<{ status: string; processedUrl: string | null }> {
+): Promise<VideoStatusResponse> {
   const { data } = await axios.get(`${API_URL}/api/videos/${videoId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return data;
+}
+
+export async function updateSpeechText(
+  videoId: string,
+  edits: { segmentIndex: number; wordIndex: number; newText: string }[],
+  accessToken: string
+): Promise<{ captionData: CaptionData }> {
+  const { data } = await axios.patch(
+    `${API_URL}/api/videos/${videoId}/speech`,
+    { edits },
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return data;
+}
+
+export async function addOverlay(
+  videoId: string,
+  overlay: {
+    text: string;
+    start: number;
+    end: number;
+    position?: Overlay["position"];
+    style?: Overlay["style"];
+  },
+  accessToken: string
+): Promise<{ overlay: Overlay }> {
+  const { data } = await axios.post(
+    `${API_URL}/api/videos/${videoId}/overlays`,
+    overlay,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return data;
+}
+
+export async function deleteOverlay(
+  videoId: string,
+  overlayId: string,
+  accessToken: string
+): Promise<void> {
+  await axios.delete(
+    `${API_URL}/api/videos/${videoId}/overlays/${overlayId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export async function triggerExport(
+  videoId: string,
+  accessToken: string
+): Promise<void> {
+  await axios.post(
+    `${API_URL}/api/videos/${videoId}/export`,
+    {},
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
 }
