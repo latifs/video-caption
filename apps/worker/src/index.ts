@@ -147,7 +147,9 @@ app.post("/process", (req, res) => {
   // Respond immediately, process in background
   res.json({ status: "accepted" });
 
-  processVideo(videoId, rawUrl);
+  processVideo(videoId, rawUrl).catch((err) =>
+    console.error(`processVideo failed for ${videoId}:`, err)
+  );
 });
 
 app.post("/export", (req, res) => {
@@ -166,7 +168,9 @@ app.post("/export", (req, res) => {
   // Respond immediately, export in background
   res.json({ status: "accepted" });
 
-  exportVideo(videoId);
+  exportVideo(videoId).catch((err) =>
+    console.error(`exportVideo failed for ${videoId}:`, err)
+  );
 });
 
 const PORT = Number(process.env.PORT) || 8080;

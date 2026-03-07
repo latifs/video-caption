@@ -36,11 +36,16 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('videos', 'videos', true)
 
 -- Storage policies
 DO $$ BEGIN
-  CREATE POLICY "Allow authenticated uploads" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'videos' AND (storage.foldername(name))[1] = 'raw');
+  CREATE POLICY "Allow authenticated uploads" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'videos' AND (storage.foldername(name))[1] = 'raw' AND (storage.foldername(name))[2] = auth.uid()::text);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-  CREATE POLICY "Allow public read" ON storage.objects FOR SELECT TO public USING (bucket_id = 'videos');
+  CREATE POLICY "Allow public read" ON storage.objects FOR SELECT TO public USING (bucket_id = 'videos' AND (storage.foldername(name))[1] = 'processed');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Allow owners to read raw uploads" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'videos' AND (storage.foldername(name))[1] = 'raw' AND (storage.foldername(name))[2] = auth.uid()::text);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

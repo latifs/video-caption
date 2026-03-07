@@ -1,7 +1,9 @@
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 
-ffmpeg.setFfmpegPath(ffmpegPath!);
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+}
 
 export function extractAudio(
   inputPath: string,

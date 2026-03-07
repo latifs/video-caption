@@ -6,7 +6,18 @@ import { callWorker } from "@/lib/worker";
 
 const bodySchema = z.object({
   videoId: z.string().uuid(),
-  rawUrl: z.string().url(),
+  rawUrl: z.string().url().refine(
+    (url) => {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      if (!supabaseUrl) return false;
+      try {
+        return new URL(url).origin === new URL(supabaseUrl).origin;
+      } catch {
+        return false;
+      }
+    },
+    { message: "rawUrl must point to the Supabase storage host" }
+  ),
 });
 
 export async function POST(request: Request) {

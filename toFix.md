@@ -166,3 +166,15 @@ Console statements should be removed or replaced with proper logging for product
 ### 14. No terms of service
 
 Neither a terms of service document nor a link to one exists in the app. While not strictly required by all store categories, it is strongly recommended and may be required depending on your app's functionality (e.g., user-generated content).
+
+---
+
+### 15. Test file inlines production logic instead of importing it
+
+**Location:** `apps/mobile/src/__tests__/caption-utils.test.ts`
+
+The test file copy-pastes `findActiveSegment`, `findActiveWordIndex`, and `findActiveOverlays` instead of importing them from `src/lib/caption-utils.ts`. This means the test suite can pass even if the production code regresses.
+
+The workaround exists because Vitest can't resolve React Native / `types` package transitive dependencies during test runs.
+
+**Fix:** Configure Vitest path aliases to handle `types` module resolution, then replace the inlined functions with direct imports from `@/lib/caption-utils`.
