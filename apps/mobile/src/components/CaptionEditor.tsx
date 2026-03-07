@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -82,16 +82,18 @@ export function CaptionEditor({
   const segment = segments[activeIdx];
 
   // Clear tap-selection when playback moves past the selected word
-  if (selectedWord) {
-    if (selectedWord.segmentIndex !== activeIdx) {
-      setSelectedWord(null);
-    } else {
-      const selWord = segment.words[selectedWord.wordIndex];
-      if (selWord && currentTime > selWord.end + 0.15) {
+  useEffect(() => {
+    if (selectedWord) {
+      if (selectedWord.segmentIndex !== activeIdx) {
         setSelectedWord(null);
+      } else {
+        const selWord = segment.words[selectedWord.wordIndex];
+        if (selWord && currentTime > selWord.end + 0.15) {
+          setSelectedWord(null);
+        }
       }
     }
-  }
+  }, [currentTime, activeIdx, selectedWord, segment.words]);
 
   // Overlays that overlap this segment's time range
   const segmentOverlays = captionData.overlayTrack.filter(

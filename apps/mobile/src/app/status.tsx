@@ -15,6 +15,7 @@ import {
   Pressable,
   Modal,
   StatusBar,
+  Dimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     width: "100%",
-    aspectRatio: 16 / 9,
+    height: Dimensions.get("window").height * 0.5,
     overflow: "hidden",
     backgroundColor: "#000",
   },
