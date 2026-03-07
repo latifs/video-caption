@@ -6,5 +6,7 @@ export interface ProcessVideoRequest {
 export type VideoStatus =
   | "uploaded"
   | "processing"
+  | "transcribed"
+  | "exporting"
   | "completed"
   | "failed";

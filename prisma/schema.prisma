@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String  @id @db.Uuid
+  email       String?
+  displayName String?
+  imageUrl    String?
+  videos      Video[]
+}
+
+model Video {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  rawUrl       String
+  processedUrl String?
+  status       String   @default("uploaded")
+  durationSec  Float?
+  captionData  Json?    @db.JsonB
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+}
