@@ -8,8 +8,6 @@
     "start": "node dist/src/index.js"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.4.2",
-    "@prisma/client": "^7.4.2",
     "@supabase/supabase-js": "^2.49.4",
     "axios": "^1.9.0",
     "dotenv": "^16.5.0",

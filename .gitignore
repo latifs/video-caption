@@ -10,6 +10,3 @@ android/
 web-build/
 .DS_Store
 generated/prisma
-apps/worker/prisma/
-apps/worker/prisma.config.ts
-apps/worker/generated/

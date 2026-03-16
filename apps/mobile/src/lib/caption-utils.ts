@@ -19,12 +19,39 @@ export function normalizeCaptionTimings(data: CaptionData): CaptionData {
   };
 }
 
+function hasValidTimestamps(w: SpeechWord): boolean {
+  return (
+    typeof w.start === "number" &&
+    typeof w.end === "number" &&
+    isFinite(w.start) &&
+    isFinite(w.end)
+  );
+}
+
+/**
+ * Merge words that have undefined/NaN timestamps into the previous word.
+ * This fixes data saved before the worker-side mergeUntimedWords fix.
+ */
+function mergeUntimedWords(words: SpeechWord[]): SpeechWord[] {
+  return words.reduce<SpeechWord[]>((acc, w) => {
+    if (!hasValidTimestamps(w) && acc.length > 0) {
+      const isPunctuation = /^[?.!,;:]+$/.test(w.word);
+      acc[acc.length - 1].word += isPunctuation ? w.word : ` ${w.word}`;
+    } else if (hasValidTimestamps(w)) {
+      acc.push({ ...w });
+    }
+    return acc;
+  }, []);
+}
+
 function normalizeWords(words: SpeechWord[]): SpeechWord[] {
   if (words.length === 0) return words;
 
-  const result: SpeechWord[] = words.map((w) => ({ ...w }));
+  // First pass: merge words with missing timestamps into previous word
+  const result = mergeUntimedWords(words);
+  if (result.length === 0) return result;
 
-  // Find runs of words that share the same start time or have zero duration
+  // Second pass: fix zero-duration words
   let i = 0;
   while (i < result.length) {
     // Find a run of words where each word's duration is effectively zero

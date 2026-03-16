@@ -17,7 +17,7 @@ export async function processVideo(
 
 export async function listVideos(
   accessToken: string
-): Promise<{ id: string; status: string; createdAt: string }[]> {
+): Promise<{ id: string; status: string; createdAt: string; durationSec: number | null }[]> {
   const { data } = await axios.get(`${API_URL}/api/videos`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -70,6 +70,20 @@ export async function addOverlay(
   const { data } = await axios.post(
     `${API_URL}/api/videos/${videoId}/overlays`,
     overlay,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return data;
+}
+
+export async function updateOverlay(
+  videoId: string,
+  overlayId: string,
+  updates: { text?: string; start?: number; end?: number },
+  accessToken: string
+): Promise<{ overlay: Overlay }> {
+  const { data } = await axios.patch(
+    `${API_URL}/api/videos/${videoId}/overlays/${overlayId}`,
+    updates,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   return data;

@@ -11,7 +11,8 @@
       "bundleIdentifier": "com.videocaptionapp.mobile",
       "supportsTablet": false,
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "We need access to your photo library to select videos for captioning."
+        "NSPhotoLibraryUsageDescription": "We need access to your photo library to select videos for captioning.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -36,6 +37,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b0fa06bb-669f-4971-a149-50e3a2fedd2a"
+      }
+    },
+    "owner": "latifs"
   }
 }
