@@ -4,7 +4,7 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { supabase } from "./lib/supabase";
-import { prisma, Prisma } from "./lib/prisma";
+import { callApiCallback } from "./lib/api";
 import { extractAudio, burnSubtitles } from "./lib/ffmpeg";
 import {
   buildCaptionDataFromWhisperX,
@@ -15,7 +15,7 @@ import { captionDataToSrt } from "./lib/caption-srt";
 import type { CaptionData } from "./types/caption";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 
 const WORKER_SECRET = process.env.WORKER_SECRET!;
 
@@ -43,51 +43,40 @@ async function processVideo(videoId: string, rawUrl: string): Promise<void> {
     const durationSec = getWhisperXDuration(whisperxResult);
     console.log(`[${videoId}] WhisperX succeeded`);
 
-    // Persist to DB
-    await prisma.video.update({
-      where: { id: videoId },
-      data: {
-        status: "transcribed",
-        durationSec,
-        captionData: captionData as unknown as Prisma.InputJsonValue,
-      },
+    // Persist via API callback
+    await callApiCallback(videoId, {
+      status: "transcribed",
+      captionData,
+      durationSec,
     });
   } catch (error) {
     console.error(`Processing failed for ${videoId}:`, error);
-    await prisma.video.update({
-      where: { id: videoId },
-      data: { status: "failed" },
-    });
+    await callApiCallback(videoId, { status: "failed" });
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
-async function exportVideo(videoId: string): Promise<void> {
+async function exportVideo(
+  videoId: string,
+  captionData: CaptionData,
+  rawUrl: string
+): Promise<void> {
   const tmpDir = path.join("/tmp", `${videoId}-export`);
   try {
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    // Read video record
-    const video = await prisma.video.findUniqueOrThrow({
-      where: { id: videoId },
-    });
-
-    const captionData = video.captionData as unknown as CaptionData;
     if (!captionData) throw new Error("No caption data found");
 
     // Set exporting status
-    await prisma.video.update({
-      where: { id: videoId },
-      data: { status: "exporting" },
-    });
+    await callApiCallback(videoId, { status: "exporting" });
 
     const inputPath = path.join(tmpDir, "input.mp4");
     const srtPath = path.join(tmpDir, "subtitles.srt");
     const outputPath = path.join(tmpDir, "output.mp4");
 
     // Download raw video
-    const response = await axios.get(video.rawUrl, {
+    const response = await axios.get(rawUrl, {
       responseType: "arraybuffer",
     });
     fs.writeFileSync(inputPath, Buffer.from(response.data));
@@ -116,16 +105,13 @@ async function exportVideo(videoId: string): Promise<void> {
       .from("videos")
       .getPublicUrl(storagePath);
 
-    await prisma.video.update({
-      where: { id: videoId },
-      data: { status: "completed", processedUrl: urlData.publicUrl },
+    await callApiCallback(videoId, {
+      status: "completed",
+      processedUrl: urlData.publicUrl,
     });
   } catch (error) {
     console.error(`Export failed for ${videoId}:`, error);
-    await prisma.video.update({
-      where: { id: videoId },
-      data: { status: "failed" },
-    });
+    await callApiCallback(videoId, { status: "failed" });
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -153,7 +139,7 @@ app.post("/process", (req, res) => {
 });
 
 app.post("/export", (req, res) => {
-  const { videoId, secret } = req.body;
+  const { videoId, captionData, rawUrl, secret } = req.body;
 
   if (secret !== WORKER_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
@@ -168,7 +154,7 @@ app.post("/export", (req, res) => {
   // Respond immediately, export in background
   res.json({ status: "accepted" });
 
-  exportVideo(videoId).catch((err) =>
+  exportVideo(videoId, captionData, rawUrl).catch((err) =>
     console.error(`exportVideo failed for ${videoId}:`, err)
   );
 });

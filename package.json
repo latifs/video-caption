@@ -5,7 +5,7 @@
     "dev:mobile": "pnpm --filter mobile start -- --clear",
     "dev:api": "pnpm --filter api dev",
     "dev:worker": "pnpm --filter worker dev",
-    "build:worker": "cp -r prisma apps/worker/prisma && cp prisma.config.ts apps/worker/ && pnpm --filter worker build",
+    "build:worker": "pnpm --filter worker build",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "db:generate": "prisma generate",

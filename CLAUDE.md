@@ -14,7 +14,7 @@ pnpm dev:api           # Next.js on port 3000
 pnpm dev:worker        # Express on port 8080 (via ts-node)
 
 # Building
-pnpm build:worker      # tsc → apps/worker/dist/
+pnpm build:worker      # tsc → apps/worker/dist/ (no prisma step)
 pnpm --filter api build
 
 # Typecheck individual workspaces
@@ -36,13 +36,16 @@ No test framework or linter is configured yet.
 
 ```
 Mobile (Expo) → API (Next.js) → Worker (Express on Cloud Run)
-       ↕              ↕                ↕
-              Supabase (auth, storage, database)
+       ↕              ↕                │
+              Supabase (auth,      callback POST
+              storage, database)       │
+                      ▲                │
+                      └────────────────┘
 ```
 
 - **Mobile** uses Supabase anon key (`EXPO_PUBLIC_` env vars)
-- **API** uses Supabase service role key, orchestrates processing
-- **Worker** uses Supabase service role key, OpenAI, ffmpeg
+- **API** uses Supabase service role key, orchestrates processing, owns all DB writes (Prisma)
+- **Worker** uses Supabase for storage only, calls API callback to persist results (no direct DB access)
 - API and Worker authenticate with a shared `WORKER_SECRET`
 
 ### Workspaces
@@ -69,6 +72,8 @@ Mobile (Expo) → API (Next.js) → Worker (Express on Cloud Run)
 ### Worker / Cloud Run specifics
 
 - Must bind to `0.0.0.0` on `process.env.PORT` (default 8080)
+- No Prisma / no `DATABASE_URL` — all DB writes go through API callback (`POST /api/videos/:id/callback`)
+- Needs `API_URL` env var to reach the API
 - Dockerfile uses `npm` (not pnpm) — self-contained, no workspace deps
 - TypeScript compiled inside container; production runs compiled JS only
 - `ts-node` for local dev, `tsc` + `node dist/` for production

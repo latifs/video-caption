@@ -12,17 +12,20 @@ Upload a short video from your phone, get AI-generated captions with accurate wo
 │   (Expo)    │       │  (Next.js)  │       │  (Express)  │       │ (WhisperX)  │
 └─────────────┘       └─────────────┘       └─────────────┘       └─────────────┘
        │                     │                     │
-       │                     │                     │
-       ▼                     ▼                     ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              Supabase                                          │
-│                     Auth · Storage · PostgreSQL                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
+       │                     │              callback POST
+       ▼                     ▼                     │
+┌──────────────────────┐     │                     │
+│      Supabase        │     │              ┌──────┘
+│   Auth · Storage     │     ▼              ▼
+│                      │  ┌─────────────────────┐
+│                      │  │     PostgreSQL       │
+│                      │  │   (via Prisma)       │
+└──────────────────────┘  └─────────────────────┘
 ```
 
 - **Mobile (Expo)** — Upload videos, browse/edit captions, trigger export
-- **API (Next.js)** — Authentication, orchestration, database access via Prisma
-- **Worker (Express / Cloud Run)** — Heavy processing: audio extraction (ffmpeg), transcription (WhisperX via Replicate), subtitle burning (ffmpeg)
+- **API (Next.js)** — Authentication, orchestration, all database writes via Prisma. Worker reports results back via a callback endpoint.
+- **Worker (Express / Cloud Run)** — Heavy processing: audio extraction (ffmpeg), transcription (WhisperX via Replicate), subtitle burning (ffmpeg). No direct DB access — calls API callback to persist results.
 - **Replicate** — Runs the WhisperX model (Whisper large-v3 + wav2vec2 forced alignment) on GPU for accurate per-word timestamps
 - **Supabase** — Auth (JWT), Storage (raw + processed videos), PostgreSQL (video records, caption data)
 
@@ -32,11 +35,11 @@ Upload a short video from your phone, get AI-generated captions with accurate wo
 2. Mobile calls `POST /api/process` → API creates DB record, calls Worker
 3. Worker downloads video, extracts audio with ffmpeg
 4. Worker sends audio to WhisperX on Replicate → returns word-level timestamps
-5. Worker saves caption data to DB → status: `transcribed`
+5. Worker calls API callback with caption data → API saves to DB → status: `transcribed`
 6. Mobile polls `GET /api/videos/:id`, displays editable captions
 7. User edits captions (`PATCH /api/videos/:id/speech`)
-8. User triggers export (`POST /api/videos/:id/export`)
-9. Worker burns subtitles into video with ffmpeg → uploads to Supabase Storage
+8. User triggers export (`POST /api/videos/:id/export`) → API sends captionData + rawUrl to Worker
+9. Worker burns subtitles into video with ffmpeg → uploads to Supabase Storage → calls API callback → status: `completed`
 
 ## Prerequisites
 
@@ -153,6 +156,7 @@ sql/          Auth triggers and storage policies
 | `POST`   | `/api/process`                    | Trigger video processing        |
 | `GET`    | `/api/videos`                     | List user's videos              |
 | `GET`    | `/api/videos/:id`                 | Get video status & caption data |
+| `POST`   | `/api/videos/:id/callback`        | Worker callback (status updates)|
 | `POST`   | `/api/videos/:id/export`          | Trigger subtitle burn & export  |
 | `PATCH`  | `/api/videos/:id/speech`          | Edit caption word text          |
 | `POST`   | `/api/videos/:id/overlays`        | Add a text overlay              |
@@ -192,7 +196,7 @@ pnpm db:generate   # Regenerate Prisma client
 
 | Variable                    | Description                      |
 | --------------------------- | -------------------------------- |
-| `DATABASE_URL`              | Postgres connection string       |
+| `API_URL`                   | Next.js API base URL             |
 | `SUPABASE_URL`              | Supabase project URL             |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key        |
 | `REPLICATE_API_TOKEN`       | Replicate API token for WhisperX |
@@ -209,6 +213,6 @@ docker run -p 8080:8080 video-caption-worker
 
 - **Mobile:** Expo 55, React Native, Expo Router, Supabase JS
 - **API:** Next.js 16, Prisma 7, Supabase JS, Zod
-- **Worker:** Express, Prisma 7, WhisperX (via Replicate), fluent-ffmpeg, Supabase JS
+- **Worker:** Express, WhisperX (via Replicate), fluent-ffmpeg, Supabase JS
 - **Database:** PostgreSQL (Supabase), Prisma ORM
 - **Infra:** pnpm workspaces, Docker, Cloud Run
