@@ -5,7 +5,7 @@ import {
   useCallback,
   forwardRef,
   useImperativeHandle,
-} from "react";
+} from 'react';
 import {
   View,
   Text,
@@ -16,20 +16,22 @@ import {
   Modal,
   StatusBar,
   Dimensions,
-} from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useVideoPlayer, VideoView } from "expo-video";
-import { useEventListener } from "expo";
-import { useAuth } from "@/lib/auth";
-import { getVideoStatus, triggerExport } from "@/lib/api";
-import { usePlaybackTime } from "@/hooks/usePlaybackTime";
-import { CaptionOverlay } from "@/components/CaptionOverlay";
-import { CaptionEditor } from "@/components/CaptionEditor";
-import { normalizeCaptionTimings } from "@/lib/caption-utils";
-import type { CaptionData } from "types";
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { useEventListener } from 'expo';
+import { useAuth } from '@/lib/auth';
+import { getVideoStatus, triggerExport } from '@/lib/api';
+import { CaptionOverlay } from '@/components/CaptionOverlay';
+import { CaptionEditor } from '@/components/CaptionEditor';
+import { VideoControls } from '@/components/VideoControls';
+import { normalizeCaptionTimings } from '@/lib/caption-utils';
+import type { CaptionData } from 'types';
 
 interface CaptionedVideoHandle {
   seekTo: (time: number) => void;
+  pause: () => void;
+  togglePlay: () => void;
 }
 
 const CaptionedVideo = forwardRef<
@@ -38,30 +40,67 @@ const CaptionedVideo = forwardRef<
     url: string;
     captionData: CaptionData;
     onTimeUpdate?: (time: number) => void;
+    onPlayingChange?: (isPlaying: boolean) => void;
+    onDurationChange?: (duration: number) => void;
   }
->(function CaptionedVideo({ url, captionData, onTimeUpdate }, ref) {
+>(function CaptionedVideo(
+  { url, captionData, onTimeUpdate, onPlayingChange, onDurationChange },
+  ref,
+) {
   const player = useVideoPlayer(url, (p) => {
     p.timeUpdateEventInterval = 0.1;
   });
-  const currentTime = usePlaybackTime(player);
+  const [currentTime, setCurrentTime] = useState(0);
 
-  useImperativeHandle(ref, () => ({
-    seekTo: (time: number) => {
-      player.currentTime = time;
-    },
-  }), [player]);
+  // Single event listener drives both local state (for overlay) and parent callback directly
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  onTimeUpdateRef.current = onTimeUpdate;
 
-  useEffect(() => {
-    onTimeUpdate?.(currentTime);
-  }, [currentTime, onTimeUpdate]);
+  useEventListener(player, 'timeUpdate', (payload) => {
+    setCurrentTime(payload.currentTime);
+    onTimeUpdateRef.current?.(payload.currentTime);
+  });
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      seekTo: (time: number) => {
+        if (typeof time === 'number' && isFinite(time)) {
+          player.currentTime = time;
+        }
+      },
+      pause: () => {
+        player.pause();
+      },
+      togglePlay: () => {
+        if (player.playing) {
+          player.pause();
+        } else {
+          player.play();
+        }
+      },
+    }),
+    [player],
+  );
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEventListener(player, "playingChange", ({ isPlaying: playing }) => {
+  useEventListener(player, 'statusChange', (({ status }: any) => {
+    if (status === 'readyToPlay' && player.duration > 0) {
+      onDurationChange?.(player.duration);
+    }
+  }) as any);
+
+  useEventListener(player, 'playingChange', ({ isPlaying: playing }) => {
     setIsPlaying(playing);
+    onPlayingChange?.(playing);
+    // Also report duration on first play, in case statusChange missed it
+    if (playing && player.duration > 0) {
+      onDurationChange?.(player.duration);
+    }
   });
 
   const scheduleHide = useCallback(() => {
@@ -90,7 +129,7 @@ const CaptionedVideo = forwardRef<
         contentFit="contain"
         allowsFullscreen={false}
         allowsPictureInPicture={!fullscreen}
-        nativeControls={!fullscreen}
+        nativeControls={false}
       />
 
       {/* Tap target for fullscreen controls */}
@@ -103,7 +142,7 @@ const CaptionedVideo = forwardRef<
                 onPress={togglePlay}
               >
                 <Text style={styles.fsPlayIcon}>
-                  {isPlaying ? "\u23F8" : "\u25B6"}
+                  {isPlaying ? '\u23F8' : '\u25B6'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -122,7 +161,7 @@ const CaptionedVideo = forwardRef<
           onPress={() => setIsFullscreen((f) => !f)}
         >
           <Text style={styles.fullscreenButtonText}>
-            {fullscreen ? "\u2715" : "\u26F6"}
+            {fullscreen ? '\u2715' : '\u26F6'}
           </Text>
         </TouchableOpacity>
       )}
@@ -135,7 +174,7 @@ const CaptionedVideo = forwardRef<
       <Modal
         visible={isFullscreen}
         animationType="fade"
-        supportedOrientations={["portrait", "landscape"]}
+        supportedOrientations={['portrait', 'landscape']}
         statusBarTranslucent
       >
         <StatusBar hidden />
@@ -149,11 +188,13 @@ export default function StatusScreen() {
   const { videoId } = useLocalSearchParams<{ videoId: string }>();
   const { session } = useAuth();
   const router = useRouter();
-  const [status, setStatus] = useState("processing");
+  const [status, setStatus] = useState('processing');
   const [rawUrl, setRawUrl] = useState<string | null>(null);
   const [processedUrl, setProcessedUrl] = useState<string | null>(null);
   const [captionData, setCaptionData] = useState<CaptionData | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
   const [exporting, setExporting] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<CaptionedVideoHandle>(null);
@@ -172,14 +213,14 @@ export default function StatusScreen() {
 
         // Stop polling once we have caption data or hit a terminal state
         if (
-          data.status === "transcribed" ||
-          data.status === "completed" ||
-          data.status === "failed"
+          data.status === 'transcribed' ||
+          data.status === 'completed' ||
+          data.status === 'failed'
         ) {
           if (intervalRef.current) clearInterval(intervalRef.current);
         }
       } catch (error) {
-        console.error("Failed to poll status:", error);
+        console.error('Failed to poll status:', error);
       }
     };
 
@@ -199,12 +240,28 @@ export default function StatusScreen() {
     videoRef.current?.seekTo(time);
   }, []);
 
+  const handlePause = useCallback(() => {
+    videoRef.current?.pause();
+  }, []);
+
+  const handlePlayingChange = useCallback((playing: boolean) => {
+    setIsVideoPlaying(playing);
+  }, []);
+
+  const handleDurationChange = useCallback((duration: number) => {
+    setVideoDuration(duration);
+  }, []);
+
+  const handleTogglePlay = useCallback(() => {
+    videoRef.current?.togglePlay();
+  }, []);
+
   const handleExport = async () => {
     if (!videoId || !session) return;
     setExporting(true);
     try {
       await triggerExport(videoId, session.access_token);
-      setStatus("exporting");
+      setStatus('exporting');
 
       // Resume polling for export completion
       intervalRef.current = setInterval(async () => {
@@ -212,7 +269,7 @@ export default function StatusScreen() {
           const data = await getVideoStatus(videoId, session.access_token);
           setStatus(data.status);
           if (data.processedUrl) setProcessedUrl(data.processedUrl);
-          if (data.status === "completed" || data.status === "failed") {
+          if (data.status === 'completed' || data.status === 'failed') {
             if (intervalRef.current) clearInterval(intervalRef.current);
             setExporting(false);
           }
@@ -221,12 +278,12 @@ export default function StatusScreen() {
         }
       }, 5000);
     } catch (error) {
-      console.error("Failed to trigger export:", error);
+      console.error('Failed to trigger export:', error);
       setExporting(false);
     }
   };
 
-  if (status === "processing") {
+  if (status === 'processing') {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -236,7 +293,7 @@ export default function StatusScreen() {
     );
   }
 
-  if (status === "exporting") {
+  if (status === 'exporting') {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -246,14 +303,11 @@ export default function StatusScreen() {
     );
   }
 
-  if (status === "failed") {
+  if (status === 'failed') {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>Processing failed</Text>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
           <Text style={styles.buttonText}>Try Again</Text>
         </TouchableOpacity>
       </View>
@@ -270,17 +324,26 @@ export default function StatusScreen() {
           url={rawUrl}
           captionData={captionData}
           onTimeUpdate={handleTimeUpdate}
+          onPlayingChange={handlePlayingChange}
+          onDurationChange={handleDurationChange}
         />
       )}
 
+      {/* Custom playback controls */}
+      <VideoControls
+        currentTime={currentTime}
+        duration={videoDuration}
+        isPlaying={isVideoPlaying}
+        onTogglePlay={handleTogglePlay}
+        onSeek={handleSeekTo}
+      />
+
       {/* Toolbar */}
       <View style={styles.toolbar}>
-        <TouchableOpacity onPress={() => router.replace("/")}>
-          <Text style={styles.toolbarLink}>← Back</Text>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.toolbarLink}>{'\u2190'} Back</Text>
         </TouchableOpacity>
-        {processedUrl && (
-          <Text style={styles.toolbarHint}>Exported</Text>
-        )}
+        {processedUrl && <Text style={styles.toolbarHint}>Exported</Text>}
       </View>
 
       {/* Caption editor fills remaining space */}
@@ -288,10 +351,12 @@ export default function StatusScreen() {
         <CaptionEditor
           captionData={captionData}
           currentTime={currentTime}
+          duration={videoDuration}
           videoId={videoId!}
           accessToken={session.access_token}
-          onCaptionDataChange={(data) => setCaptionData(normalizeCaptionTimings(data))}
+          onCaptionDataChange={setCaptionData}
           onSeekTo={handleSeekTo}
+          onPause={handlePause}
         />
       )}
 
@@ -304,10 +369,10 @@ export default function StatusScreen() {
         >
           <Text style={styles.exportButtonText}>
             {exporting
-              ? "Exporting..."
-              : status === "completed"
-                ? "Re-export Video"
-                : "Export Video"}
+              ? 'Exporting...'
+              : status === 'completed'
+                ? 'Re-export Video'
+                : 'Export Video'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -318,76 +383,76 @@ export default function StatusScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 20,
   },
   editorContainer: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: '#111',
   },
   toolbar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e0e0e0",
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   toolbarLink: {
-    color: "#007AFF",
+    color: '#A78BFA',
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   toolbarHint: {
     fontSize: 13,
-    color: "#34C759",
-    fontWeight: "500",
+    color: '#34C759',
+    fontWeight: '500',
   },
   bottomBar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: 28,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e0e0e0",
-    backgroundColor: "#fff",
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#111',
   },
   exportButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: '#8B5CF6',
     paddingVertical: 14,
     borderRadius: 10,
-    alignItems: "center",
+    alignItems: 'center',
   },
   exportButtonText: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   videoContainer: {
-    width: "100%",
-    height: Dimensions.get("window").height * 0.5,
-    overflow: "hidden",
-    backgroundColor: "#000",
+    width: '100%',
+    height: Dimensions.get('window').height * 0.4,
+    overflow: 'hidden',
+    backgroundColor: '#000',
   },
   fsRoot: {
     flex: 1,
-    backgroundColor: "#000",
+    backgroundColor: '#000',
   },
   video: {
-    width: "100%",
-    height: "100%",
+    width: '100%',
+    height: '100%',
   },
   fullscreenButton: {
-    position: "absolute",
+    position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fullscreenButtonFs: {
     top: 50,
@@ -397,43 +462,43 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   fullscreenButtonText: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 18,
   },
   fsControls: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fsPlayButton: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fsPlayIcon: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 28,
   },
   statusText: {
     fontSize: 18,
     marginTop: 20,
-    color: "#333",
+    color: '#333',
   },
   hint: {
     fontSize: 14,
-    color: "#999",
+    color: '#999',
     marginTop: 8,
   },
   errorText: {
     fontSize: 18,
-    color: "#FF3B30",
+    color: '#FF3B30',
     marginBottom: 20,
   },
   button: {
-    backgroundColor: "#007AFF",
+    backgroundColor: '#007AFF',
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 8,
@@ -442,8 +507,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonText: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
   },
 });

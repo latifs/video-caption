@@ -2,8 +2,8 @@ import Replicate from "replicate";
 
 export interface WhisperXWord {
   word: string;
-  start: number;
-  end: number;
+  start?: number;
+  end?: number;
 }
 
 export interface WhisperXSegment {

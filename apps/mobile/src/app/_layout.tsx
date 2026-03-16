@@ -1,4 +1,4 @@
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
@@ -22,7 +22,15 @@ function AuthGate() {
     }
   }, [session, loading, segments]);
 
-  return <Slot />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: "#111" },
+        animation: "default",
+      }}
+    />
+  );
 }
 
 export default function RootLayout() {

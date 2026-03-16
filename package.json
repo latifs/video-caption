@@ -2,7 +2,7 @@
   "name": "video-caption-app",
   "private": true,
   "scripts": {
-    "dev:mobile": "pnpm --filter mobile start",
+    "dev:mobile": "pnpm --filter mobile start -- --clear",
     "dev:api": "pnpm --filter api dev",
     "dev:worker": "pnpm --filter worker dev",
     "build:worker": "cp -r prisma apps/worker/prisma && cp prisma.config.ts apps/worker/ && pnpm --filter worker build",
@@ -33,6 +33,10 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",
-    "pg": "^8.16.0"
-  }
+    "pg": "^8.16.0",
+    "expo": "~55.0.4",
+    "react": "19.2.0",
+    "react-native": "0.83.2"
+  },
+  "version": "1.0.0"
 }

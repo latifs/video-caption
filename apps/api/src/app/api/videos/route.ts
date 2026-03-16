@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: 10,
-    select: { id: true, status: true, createdAt: true },
+    select: { id: true, status: true, createdAt: true, durationSec: true },
   });
 
   return NextResponse.json(videos);
