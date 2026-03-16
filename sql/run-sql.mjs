@@ -50,7 +50,15 @@ async function main() {
       console.log("🚀 Starting deployment...\n");
 
       console.log("1/3 📦 Generating Prisma client...");
-      execSync("pnpm exec prisma generate", { stdio: "inherit" });
+      execSync("pnpm exec prisma generate", {
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          DATABASE_URL:
+            process.env.DATABASE_URL ||
+            "postgresql://placeholder@localhost:5432/placeholder",
+        },
+      });
 
       console.log("\n2/3 🗃️  Running Prisma migrations...");
       execSync("pnpm exec prisma migrate deploy", { stdio: "inherit" });
