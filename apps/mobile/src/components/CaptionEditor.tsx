@@ -378,7 +378,7 @@ export function CaptionEditor({
           {
             text: 'Save',
             onPress: (newText?: string) => {
-              if (newText && newText !== flatWord.word) {
+              if (newText !== undefined && newText !== flatWord.word) {
                 submitWordEdit(
                   flatWord.segmentIndex,
                   flatWord.wordIndex,
@@ -425,7 +425,7 @@ export function CaptionEditor({
     const { segmentIndex, wordIndex, text } = editModal;
     const original = segments[segmentIndex].words[wordIndex].word;
     setEditModal(null);
-    if (text && text !== original)
+    if (text !== undefined && text !== original)
       submitWordEdit(segmentIndex, wordIndex, text);
   };
 

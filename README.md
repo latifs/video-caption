@@ -150,17 +150,17 @@ sql/          Auth triggers and storage policies
 
 ## API Routes
 
-| Method   | Path                              | Description                     |
-| -------- | --------------------------------- | ------------------------------- |
-| `GET`    | `/api/health`                     | Health check                    |
-| `POST`   | `/api/process`                    | Trigger video processing        |
-| `GET`    | `/api/videos`                     | List user's videos              |
-| `GET`    | `/api/videos/:id`                 | Get video status & caption data |
-| `POST`   | `/api/videos/:id/callback`        | Worker callback (status updates)|
-| `POST`   | `/api/videos/:id/export`          | Trigger subtitle burn & export  |
-| `PATCH`  | `/api/videos/:id/speech`          | Edit caption word text          |
-| `POST`   | `/api/videos/:id/overlays`        | Add a text overlay              |
-| `DELETE`  | `/api/videos/:id/overlays/:overlayId` | Remove an overlay          |
+| Method   | Path                                  | Description                      |
+| -------- | ------------------------------------- | -------------------------------- |
+| `GET`    | `/api/health`                         | Health check                     |
+| `POST`   | `/api/process`                        | Trigger video processing         |
+| `GET`    | `/api/videos`                         | List user's videos               |
+| `GET`    | `/api/videos/:id`                     | Get video status & caption data  |
+| `POST`   | `/api/videos/:id/callback`            | Worker callback (status updates) |
+| `POST`   | `/api/videos/:id/export`              | Trigger subtitle burn & export   |
+| `PATCH`  | `/api/videos/:id/speech`              | Edit caption word text           |
+| `POST`   | `/api/videos/:id/overlays`            | Add a text overlay               |
+| `DELETE` | `/api/videos/:id/overlays/:overlayId` | Remove an overlay                |
 
 ## Database
 
@@ -208,6 +208,123 @@ pnpm db:generate   # Regenerate Prisma client
 docker build -t video-caption-worker apps/worker/
 docker run -p 8080:8080 video-caption-worker
 ```
+
+## Deployment
+
+The app deploys automatically when code is merged to `main`:
+
+- **API** deploys to **Vercel** via its native GitHub integration (no GitHub Action needed)
+- **Worker** deploys to **Google Cloud Run** via GitHub Actions
+- **Database migrations** run via GitHub Actions before the worker deploys
+
+```
+Push/merge to main
+        |
+        +-- GitHub Actions --> [migrate] --> [deploy-worker]
+        |                       run SQL       docker build
+        |                       migrations    push to Artifact Registry
+        |                                     deploy to Cloud Run
+        |
+        +-- Vercel (independent) --> pnpm install
+                                     prisma generate
+                                     next build
+                                     deploy to edge
+```
+
+### One-Time Setup
+
+#### 1. Google Cloud Platform (GCP)
+
+You need a GCP project with the following configured:
+
+**Enable APIs:**
+
+- Go to `https://console.cloud.google.com/apis/library` and enable:
+  - **Cloud Run Admin API**
+  - **Artifact Registry API**
+
+**Create an Artifact Registry repository** (stores Docker images):
+
+- Go to `https://console.cloud.google.com/artifacts`
+- Click "Create Repository"
+- Name: `video-caption-app`
+- Format: Docker
+- Region: `us-central1` (or your preferred region)
+
+**Create a service account** (used by GitHub Actions to deploy):
+
+- Go to `https://console.cloud.google.com/iam-admin/serviceaccounts`
+- Click "Create Service Account"
+- Name: `github-deploy`
+- Grant these roles:
+  - `Cloud Run Admin` — deploy and manage Cloud Run services
+  - `Artifact Registry Writer` — push Docker images
+  - `Service Account User` — act as the Cloud Run service account
+- After creation, click into the service account → **Keys** tab → **Add Key** → **Create new key** → **JSON**
+- Download the JSON key file (you'll paste its entire contents as a GitHub secret)
+
+#### 2. Vercel
+
+- Go to `https://vercel.com/new` and import the GitHub repository
+- Set **Root Directory** to `apps/api`
+- Under **Settings → build and deployment**, enable **"Include source files outside of the Root Directory"** (required because the Prisma schema lives at the repo root)
+- Set **Production Branch** to `main`
+- Add these environment variables in **Settings → Environment Variables**:
+
+| Variable                    | Value                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | Supabase Postgres connection string (use **Session Pooler** — required for serverless) |
+| `SUPABASE_URL`              | Supabase project URL (e.g. `https://xxx.supabase.co`)                                  |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key                                                              |
+| `WORKER_URL`                | Cloud Run worker URL (available after first worker deploy)                             |
+| `WORKER_SECRET`             | Shared secret for API ↔ Worker authentication                                          |
+
+> **Important:** For `DATABASE_URL`, use the **Session Pooler** connection method from Supabase (not Direct Connection). Vercel runs on serverless infrastructure and uses IPv4 — the direct connection won't work. You can find the Session Pooler URL in your Supabase dashboard under **Settings → Database → Connection String → Session Pooler**.
+
+#### 3. GitHub Secrets and Variables
+
+Go to your repository's **Settings → Secrets and variables → Actions**.
+
+**Repository Secrets** (Settings → Secrets → Actions → New repository secret):
+
+| Secret                      | Description                                              |
+| --------------------------- | -------------------------------------------------------- |
+| `DATABASE_URL`              | Supabase Postgres connection string (Session Pooler)     |
+| `POSTGRES_URL`              | Same as `DATABASE_URL` (used by migration script)        |
+| `GCP_SA_KEY`                | Entire contents of the GCP service account JSON key file |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key                                |
+| `WORKER_SECRET`             | Shared secret for API ↔ Worker authentication            |
+| `REPLICATE_API_TOKEN`       | Replicate API token (for WhisperX transcription)         |
+
+**Repository Variables** (Settings → Variables → Actions → New repository variable):
+
+| Variable         | Description                                | Example                       |
+| ---------------- | ------------------------------------------ | ----------------------------- |
+| `GCP_PROJECT_ID` | Your GCP project ID                        | `video-caption-490419`        |
+| `GCP_REGION`     | Region for Cloud Run and Artifact Registry | `us-central1`                 |
+| `API_URL`        | Vercel production URL for the API          | `https://your-app.vercel.app` |
+| `SUPABASE_URL`   | Supabase project URL                       | `https://xxx.supabase.co`     |
+
+### How It Works
+
+**API (Vercel):**
+Vercel detects pushes to `main` automatically. It runs the `vercel-build` script in `apps/api/package.json`, which runs `prisma generate` (from the repo root, where the schema lives) then `next build`. No GitHub Action needed.
+
+**Worker (GitHub Actions):**
+The `.github/workflows/deploy.yml` workflow has two jobs:
+
+1. **`migrate`** — Checks out the code, installs dependencies, and runs database migrations via `node sql/run-sql.mjs deploy`
+2. **`deploy-worker`** — Runs after `migrate` completes. Authenticates to GCP, builds the worker Docker image, pushes it to Artifact Registry, and deploys it to Cloud Run with all required environment variables
+
+### Verifying a Deployment
+
+After merging to `main`:
+
+1. **GitHub Actions** — Check the Actions tab for the `Deploy` workflow. The `migrate` job should complete first, then `deploy-worker`
+2. **Vercel** — Check the Vercel dashboard for a successful deployment
+3. **Worker health check** — Hit the Cloud Run worker URL at `/process` — should return 401 (auth is working)
+4. **API health check** — Hit the Vercel API URL at `/api/health` — should return 200
+5. **End-to-end** — Upload a video from the mobile app and verify transcription + export work through the deployed services
 
 ## Tech Stack
 

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "cd ../.. && pnpm exec prisma generate && cd apps/api && next build",
     "start": "next start"
   },
   "dependencies": {

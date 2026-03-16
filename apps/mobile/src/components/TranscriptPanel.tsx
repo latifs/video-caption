@@ -56,7 +56,7 @@ export function TranscriptPanel({
           {
             text: "Save",
             onPress: (newText) => {
-              if (newText && newText !== currentText) {
+              if (newText !== undefined && newText !== currentText) {
                 submitEdit(segmentIndex, wordIndex, newText);
               }
             },
@@ -96,7 +96,7 @@ export function TranscriptPanel({
     const { segmentIndex, wordIndex, text } = editModal;
     const originalText = segments[segmentIndex].words[wordIndex].word;
     setEditModal(null);
-    if (text && text !== originalText) {
+    if (text !== undefined && text !== originalText) {
       submitEdit(segmentIndex, wordIndex, text);
     }
   };
