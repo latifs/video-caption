@@ -69,6 +69,7 @@ jobs:
           service: video-caption-worker
           region: ${{ vars.GCP_REGION }}
           image: ${{ env.IMAGE }}
+          flags: "--allow-unauthenticated --memory=2Gi --cpu=2 --timeout=900"
           env_vars: |
             SUPABASE_URL=${{ vars.SUPABASE_URL }}
             SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
