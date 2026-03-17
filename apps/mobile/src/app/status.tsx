@@ -20,6 +20,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEventListener } from 'expo';
+import { ArrowLeft, Play, Pause, X, Maximize } from '@/lib/icons';
 import { useAuth } from '@/lib/auth';
 import { getVideoStatus, triggerExport } from '@/lib/api';
 import { CaptionOverlay } from '@/components/CaptionOverlay';
@@ -122,12 +123,21 @@ const CaptionedVideo = forwardRef<
   };
 
   const videoContent = (fullscreen: boolean) => (
-    <View style={fullscreen ? styles.fsRoot : styles.videoContainer}>
+    <View
+      className={
+        fullscreen ? 'flex-1 bg-black' : 'w-full overflow-hidden bg-black'
+      }
+      style={
+        !fullscreen
+          ? { height: Dimensions.get('window').height * 0.4 }
+          : undefined
+      }
+    >
       <VideoView
         player={player}
         style={styles.video}
         contentFit="contain"
-        allowsFullscreen={false}
+        // allowsFullscreen={false}
         allowsPictureInPicture={!fullscreen}
         nativeControls={false}
       />
@@ -136,14 +146,16 @@ const CaptionedVideo = forwardRef<
       {fullscreen && (
         <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
           {showControls && (
-            <View style={styles.fsControls}>
+            <View className="absolute inset-0 items-center justify-center">
               <TouchableOpacity
-                style={styles.fsPlayButton}
+                className="h-16 w-16 items-center justify-center rounded-full bg-overlay"
                 onPress={togglePlay}
               >
-                <Text style={styles.fsPlayIcon}>
-                  {isPlaying ? '\u23F8' : '\u25B6'}
-                </Text>
+                {isPlaying ? (
+                  <Pause size={28} className="text-foreground" />
+                ) : (
+                  <Play size={28} className="text-foreground" fill="#fff" />
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -154,15 +166,16 @@ const CaptionedVideo = forwardRef<
 
       {(!fullscreen || showControls) && (
         <TouchableOpacity
-          style={[
-            styles.fullscreenButton,
-            fullscreen && styles.fullscreenButtonFs,
-          ]}
+          className={`absolute items-center justify-center rounded-full bg-overlay ${
+            fullscreen ? 'right-4 top-[50px] h-9 w-9' : 'right-2 top-2 h-8 w-8'
+          }`}
           onPress={() => setIsFullscreen((f) => !f)}
         >
-          <Text style={styles.fullscreenButtonText}>
-            {fullscreen ? '\u2715' : '\u26F6'}
-          </Text>
+          {fullscreen ? (
+            <X size={18} className="text-foreground" />
+          ) : (
+            <Maximize size={18} className="text-foreground" />
+          )}
         </TouchableOpacity>
       )}
     </View>
@@ -285,30 +298,43 @@ export default function StatusScreen() {
 
   if (status === 'processing') {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.statusText}>Processing your video...</Text>
-        <Text style={styles.hint}>This may take a minute</Text>
+      <View className="flex-1 items-center justify-center bg-background p-5">
+        <ActivityIndicator size="large" color="#8B5CF6" />
+        <Text className="mt-5 text-lg text-foreground">
+          Processing your video...
+        </Text>
+        <Text className="mt-2 text-sm text-muted-foreground">
+          This may take a minute
+        </Text>
       </View>
     );
   }
 
   if (status === 'exporting') {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.statusText}>Exporting your video...</Text>
-        <Text style={styles.hint}>Burning captions into video</Text>
+      <View className="flex-1 items-center justify-center bg-background p-5">
+        <ActivityIndicator size="large" color="#8B5CF6" />
+        <Text className="mt-5 text-lg text-foreground">
+          Exporting your video...
+        </Text>
+        <Text className="mt-2 text-sm text-muted-foreground">
+          Burning captions into video
+        </Text>
       </View>
     );
   }
 
   if (status === 'failed') {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Processing failed</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Try Again</Text>
+      <View className="flex-1 items-center justify-center bg-background p-5">
+        <Text className="mb-5 text-lg text-destructive">Processing failed</Text>
+        <TouchableOpacity
+          className="rounded-lg bg-primary px-8 py-3.5"
+          onPress={() => router.back()}
+        >
+          <Text className="text-base font-semibold text-foreground">
+            Try Again
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -316,7 +342,7 @@ export default function StatusScreen() {
 
   // "transcribed" or "completed" — show captioned video
   return (
-    <View style={styles.editorContainer}>
+    <View className="flex-1 bg-background">
       {/* Video pinned at top */}
       {rawUrl && captionData && (
         <CaptionedVideo
@@ -339,11 +365,17 @@ export default function StatusScreen() {
       />
 
       {/* Toolbar */}
-      <View style={styles.toolbar}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.toolbarLink}>{'\u2190'} Back</Text>
+      <View className="flex-row items-center justify-between border-b border-b-border px-4 py-2">
+        <TouchableOpacity
+          className="flex-row items-center gap-1"
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={16} className="text-accent" />
+          <Text className="text-base font-medium text-accent">Back</Text>
         </TouchableOpacity>
-        {processedUrl && <Text style={styles.toolbarHint}>Exported</Text>}
+        {processedUrl && (
+          <Text className="text-xs font-medium text-success">Exported</Text>
+        )}
       </View>
 
       {/* Caption editor fills remaining space */}
@@ -361,13 +393,13 @@ export default function StatusScreen() {
       )}
 
       {/* Pinned bottom bar */}
-      <View style={styles.bottomBar}>
+      <View className="border-t border-t-border bg-background px-4 pb-7 pt-3">
         <TouchableOpacity
-          style={[styles.exportButton, exporting && styles.buttonDisabled]}
+          className={`items-center rounded-xl bg-primary py-3.5 ${exporting ? 'opacity-50' : ''}`}
           onPress={handleExport}
           disabled={exporting}
         >
-          <Text style={styles.exportButtonText}>
+          <Text className="text-base font-semibold text-foreground">
             {exporting
               ? 'Exporting...'
               : status === 'completed'
@@ -381,134 +413,8 @@ export default function StatusScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  editorContainer: {
-    flex: 1,
-    backgroundColor: '#111',
-  },
-  toolbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  toolbarLink: {
-    color: '#A78BFA',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  toolbarHint: {
-    fontSize: 13,
-    color: '#34C759',
-    fontWeight: '500',
-  },
-  bottomBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: 28,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#111',
-  },
-  exportButton: {
-    backgroundColor: '#8B5CF6',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  exportButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  videoContainer: {
-    width: '100%',
-    height: Dimensions.get('window').height * 0.4,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-  },
-  fsRoot: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
   video: {
     width: '100%',
     height: '100%',
-  },
-  fullscreenButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fullscreenButtonFs: {
-    top: 50,
-    right: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  fullscreenButtonText: {
-    color: '#fff',
-    fontSize: 18,
-  },
-  fsControls: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsPlayButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fsPlayIcon: {
-    color: '#fff',
-    fontSize: 28,
-  },
-  statusText: {
-    fontSize: 18,
-    marginTop: 20,
-    color: '#333',
-  },
-  hint: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 8,
-  },
-  errorText: {
-    fontSize: 18,
-    color: '#FF3B30',
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

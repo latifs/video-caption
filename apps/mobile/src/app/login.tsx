@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   Alert,
 } from "react-native";
@@ -19,7 +18,7 @@ export default function LoginScreen() {
 
   if (authLoading) {
     return (
-      <View style={styles.centered}>
+      <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator size="large" color="#8B5CF6" />
       </View>
     );
@@ -44,17 +43,23 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.iconCircle}>
-        <Text style={styles.iconText}>VC</Text>
+    <View className="flex-1 items-center justify-center bg-background px-7">
+      <View className="mb-5 h-[72px] w-[72px] items-center justify-center rounded-full bg-primary shadow-lg shadow-primary/40">
+        <Text className="text-2xl font-extrabold tracking-wider text-white">
+          VC
+        </Text>
       </View>
-      <Text style={styles.title}>Video Caption</Text>
-      <Text style={styles.subtitle}>Sign in to continue</Text>
+      <Text className="mb-2 text-3xl font-extrabold text-foreground">
+        Video Caption
+      </Text>
+      <Text className="mb-10 text-base text-accent">Sign in to continue</Text>
 
-      <View style={styles.form}>
-        <Text style={styles.label}>EMAIL</Text>
+      <View className="w-full">
+        <Text className="mb-2 text-xs font-semibold tracking-wide text-accent">
+          EMAIL
+        </Text>
         <TextInput
-          style={styles.input}
+          className="mb-5 w-full rounded-xl border-[1.5px] border-[#2A2A4A] bg-muted p-4 text-base text-foreground"
           placeholder="you@example.com"
           placeholderTextColor="#6B6B8D"
           value={email}
@@ -64,9 +69,11 @@ export default function LoginScreen() {
           editable={!loading}
         />
 
-        <Text style={styles.label}>PASSWORD</Text>
+        <Text className="mb-2 text-xs font-semibold tracking-wide text-accent">
+          PASSWORD
+        </Text>
         <TextInput
-          style={styles.input}
+          className="mb-5 w-full rounded-xl border-[1.5px] border-[#2A2A4A] bg-muted p-4 text-base text-foreground"
           placeholder="Enter your password"
           placeholderTextColor="#6B6B8D"
           value={password}
@@ -79,101 +86,17 @@ export default function LoginScreen() {
           onPress={handleSignIn}
           disabled={loading}
           activeOpacity={0.8}
-          style={[styles.button, loading && { opacity: 0.6 }]}
+          className={`mt-2 items-center rounded-xl bg-primary py-4 shadow-lg shadow-primary/30 ${loading ? "opacity-60" : ""}`}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Sign In</Text>
+            <Text className="text-lg font-bold tracking-wide text-white">
+              Sign In
+            </Text>
           )}
         </TouchableOpacity>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0F0F1A",
-  },
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0F0F1A",
-    paddingHorizontal: 28,
-  },
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#8B5CF6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-    shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  iconText: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: 1,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#A78BFA",
-    marginBottom: 40,
-  },
-  form: {
-    width: "100%",
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#A78BFA",
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  input: {
-    width: "100%",
-    backgroundColor: "#1A1A2E",
-    borderWidth: 1.5,
-    borderColor: "#2A2A4A",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: "#FFFFFF",
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: "#8B5CF6",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 8,
-    shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-});

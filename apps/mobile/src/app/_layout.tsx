@@ -1,7 +1,9 @@
+import "../../global.css";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
+import { PortalHost } from "@rn-primitives/portal";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
@@ -58,6 +60,7 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <AuthGate />
+      <PortalHost />
     </AuthProvider>
   );
 }
