@@ -21,6 +21,7 @@ model Video {
   rawUrl       String
   processedUrl String?
   status       String   @default("uploaded")
+  language     String?
   durationSec  Float?
   captionData  Json?    @db.JsonB
   createdAt    DateTime @default(now())

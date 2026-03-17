@@ -3,14 +3,27 @@ import type { CaptionData, Overlay } from "types";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL!;
 
-export async function processVideo(
+export async function createVideo(
   videoId: string,
   rawUrl: string,
+  accessToken: string
+): Promise<{ id: string; status: string }> {
+  const { data } = await axios.post(
+    `${API_URL}/api/videos`,
+    { videoId, rawUrl },
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return data;
+}
+
+export async function processVideo(
+  videoId: string,
+  language: string,
   accessToken: string
 ): Promise<void> {
   await axios.post(
     `${API_URL}/api/process`,
-    { videoId, rawUrl },
+    { videoId, language },
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 }
@@ -96,6 +109,17 @@ export async function deleteOverlay(
 ): Promise<void> {
   await axios.delete(
     `${API_URL}/api/videos/${videoId}/overlays/${overlayId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export async function retryVideo(
+  videoId: string,
+  accessToken: string
+): Promise<void> {
+  await axios.post(
+    `${API_URL}/api/videos/${videoId}/retry`,
+    {},
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 }

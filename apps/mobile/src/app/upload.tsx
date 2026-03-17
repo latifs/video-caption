@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import { processVideo } from '@/lib/api';
+import { createVideo } from '@/lib/api';
 
 export default function UploadScreen() {
   const { user, session } = useAuth();
@@ -58,8 +58,8 @@ export default function UploadScreen() {
 
       const rawUrl = urlData.publicUrl;
 
-      setStatusText('Starting processing...');
-      await processVideo(videoId, rawUrl, session!.access_token);
+      setStatusText('Saving video...');
+      await createVideo(videoId, rawUrl, session!.access_token);
 
       router.push(`/status?videoId=${videoId}`);
     } catch (error: unknown) {

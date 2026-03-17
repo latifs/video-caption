@@ -21,6 +21,8 @@ const statusColor = (status: string) => {
       return '#FF3B30';
     case 'processing':
       return '#A78BFA';
+    case 'uploaded':
+      return '#60A5FA';
     default:
       return 'rgba(255,255,255,0.4)';
   }

@@ -34,7 +34,8 @@ const replicate = new Replicate({
  * @returns WhisperX result with aligned word timestamps
  */
 export async function alignWithWhisperX(
-  audioBuffer: Buffer
+  audioBuffer: Buffer,
+  language?: string
 ): Promise<WhisperXResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120_000);
@@ -46,6 +47,7 @@ export async function alignWithWhisperX(
         input: {
           audio_file: audioBuffer,
           align_output: true,
+          ...(language ? { language } : {}),
         },
         signal: controller.signal,
       }

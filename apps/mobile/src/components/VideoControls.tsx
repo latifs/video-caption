@@ -90,7 +90,6 @@ export function VideoControls({
   const handleTrackLayout = useCallback((event: LayoutChangeEvent) => {
     const { width } = event.nativeEvent.layout;
     setTrackWidth(width);
-    // Measure pageX for move calculations
     event.target?.measure?.(
       (_x: number, _y: number, _w: number, _h: number, pageX: number) => {
         trackOffsetX.current = pageX;
@@ -101,76 +100,100 @@ export function VideoControls({
   const disabled = duration <= 0;
 
   return (
-    <View className="bg-neutral-900 px-4 pb-2 pt-3">
+    <View style={styles.container}>
+      {/* Play/Pause button */}
+      <Pressable style={styles.playButton} onPress={onTogglePlay}>
+        {isPlaying ? (
+          <Pause size={14} color="#fff" />
+        ) : (
+          <Play size={14} color="#fff" />
+        )}
+      </Pressable>
+
+      {/* Current time */}
+      <Text style={styles.timeText}>
+        {formatTime(isSeeking ? seekPosition : currentTime)}
+      </Text>
+
       {/* Seek bar */}
       <View
         style={[styles.trackOuter, disabled && styles.trackDisabled]}
         onLayout={handleTrackLayout}
         {...(disabled ? {} : panResponder.panHandlers)}
       >
-        <View className="h-1 overflow-hidden rounded-sm bg-secondary">
+        <View style={styles.trackBg}>
           <View
-            className="h-full rounded-sm bg-primary"
-            style={{ width: `${clampedProgress * 100}%` }}
+            style={[styles.trackFill, { width: `${clampedProgress * 100}%` }]}
           />
         </View>
         {!disabled && (
           <View
             style={[
               styles.thumb,
-              {
-                left: `${clampedProgress * 100}%`,
-              },
+              { left: `${clampedProgress * 100}%` },
             ]}
           />
         )}
       </View>
 
-      {/* Bottom row: time + play/pause */}
-      <View className="mt-1 flex-row items-center justify-between">
-        <Text
-          className="flex-1 text-xs text-muted-foreground"
-          style={{ fontVariant: ['tabular-nums'] }}
-        >
-          {formatTime(isSeeking ? seekPosition : currentTime)} /{' '}
-          {formatTime(duration)}
-        </Text>
-
-        <Pressable
-          className="h-11 w-11 items-center justify-center rounded-full bg-secondary"
-          onPress={onTogglePlay}
-        >
-          {isPlaying ? (
-            <Pause size={16} className="text-primary" />
-          ) : (
-            <Play size={16} className="text-primary" />
-          )}
-        </Pressable>
-
-        {/* Spacer to balance layout */}
-        <View className="flex-1" />
-      </View>
+      {/* Duration */}
+      <Text style={styles.timeText}>{formatTime(duration)}</Text>
     </View>
   );
 }
 
-const THUMB_SIZE = 16;
+const THUMB_SIZE = 12;
 
 const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderRadius: 24,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    marginHorizontal: 12,
+    gap: 8,
+  },
+  playButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeText: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
+  },
   trackOuter: {
-    height: 30,
+    flex: 1,
+    height: 28,
     justifyContent: 'center',
   },
   trackDisabled: {
     opacity: 0.4,
+  },
+  trackBg: {
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    overflow: 'hidden',
+  },
+  trackFill: {
+    height: '100%',
+    borderRadius: 1.5,
+    backgroundColor: '#fff',
   },
   thumb: {
     position: 'absolute',
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#fff',
     marginLeft: -THUMB_SIZE / 2,
-    top: (30 - THUMB_SIZE) / 2,
+    top: (28 - THUMB_SIZE) / 2,
   },
 });

@@ -1,6 +1,7 @@
 import { cssInterop } from "nativewind";
 import {
   ArrowLeft,
+  ChevronDown,
   Maximize,
   Menu,
   Pause,
@@ -22,10 +23,11 @@ function iconWithClassName(icon: ComponentType<any>) {
 }
 
 iconWithClassName(ArrowLeft);
+iconWithClassName(ChevronDown);
 iconWithClassName(Maximize);
 iconWithClassName(Menu);
 iconWithClassName(Pause);
 iconWithClassName(Play);
 iconWithClassName(X);
 
-export { ArrowLeft, Maximize, Menu, Pause, Play, X };
+export { ArrowLeft, ChevronDown, Maximize, Menu, Pause, Play, X };
