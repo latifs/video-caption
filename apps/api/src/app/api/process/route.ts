@@ -1,23 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateRequest } from "@/lib/auth";
-import { prisma, Prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { callWorker } from "@/lib/worker";
 
 const bodySchema = z.object({
   videoId: z.string().uuid(),
-  rawUrl: z.string().url().refine(
-    (url) => {
-      const supabaseUrl = process.env.SUPABASE_URL;
-      if (!supabaseUrl) return false;
-      try {
-        return new URL(url).origin === new URL(supabaseUrl).origin;
-      } catch {
-        return false;
-      }
-    },
-    { message: "rawUrl must point to the Supabase storage host" }
-  ),
+  language: z.string().min(1),
 });
 
 export async function POST(request: Request) {
@@ -36,31 +25,29 @@ export async function POST(request: Request) {
     );
   }
 
-  const { videoId, rawUrl } = parsed.data;
+  const { videoId, language } = parsed.data;
 
-  try {
-    await prisma.video.create({
-      data: {
-        id: videoId,
-        userId: user.id,
-        rawUrl,
-        status: "processing",
-      },
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      return NextResponse.json(
-        { error: "Video already exists" },
-        { status: 409 }
-      );
-    }
-    throw error;
+  const video = await prisma.video.findFirst({
+    where: { id: videoId, userId: user.id },
+  });
+
+  if (!video) {
+    return NextResponse.json({ error: "Video not found" }, { status: 404 });
   }
 
-  await callWorker(videoId, rawUrl);
+  if (video.status !== "uploaded") {
+    return NextResponse.json(
+      { error: "Video is not in uploaded state" },
+      { status: 409 }
+    );
+  }
+
+  await prisma.video.update({
+    where: { id: videoId },
+    data: { status: "processing", language },
+  });
+
+  await callWorker(videoId, video.rawUrl, language);
 
   return NextResponse.json({ status: "processing", videoId });
 }

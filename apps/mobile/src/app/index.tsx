@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,11 @@ import {
   withTiming,
   interpolate,
 } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Menu } from '@/lib/icons';
 import { useAuth } from '@/lib/auth';
-import { listVideos, processVideo } from '@/lib/api';
+import { listVideos, createVideo } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { VideoListItem } from '@/components/home/VideoListItem';
 import { AddVideoSheet } from '@/components/home/AddVideoSheet';
@@ -79,10 +79,12 @@ export default function HomeScreen() {
   // Deferred action: launch picker only after modal is fully dismissed
   const pendingAction = useRef<'photos' | 'camera' | null>(null);
 
-  useEffect(() => {
-    if (!session) return;
-    listVideos(session.access_token).then(setVideos).catch(console.error);
-  }, [session]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!session) return;
+      listVideos(session.access_token).then(setVideos).catch(console.error);
+    }, [session]),
+  );
 
   const launchPicker = useCallback(
     async (useCamera: boolean) => {
@@ -124,7 +126,7 @@ export default function HomeScreen() {
           .from('videos')
           .getPublicUrl(filePath);
 
-        await processVideo(videoId, urlData.publicUrl, session!.access_token);
+        await createVideo(videoId, urlData.publicUrl, session!.access_token);
         router.push(`/status?videoId=${videoId}`);
       } catch (error: unknown) {
         const message =

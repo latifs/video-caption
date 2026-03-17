@@ -16,18 +16,36 @@ import {
   Modal,
   StatusBar,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEventListener } from 'expo';
-import { ArrowLeft, Play, Pause, X, Maximize } from '@/lib/icons';
+import { ArrowLeft, Play, Pause, X, Maximize, ChevronDown } from '@/lib/icons';
 import { useAuth } from '@/lib/auth';
-import { getVideoStatus, triggerExport } from '@/lib/api';
+import { getVideoStatus, processVideo, retryVideo, triggerExport } from '@/lib/api';
 import { CaptionOverlay } from '@/components/CaptionOverlay';
 import { CaptionEditor } from '@/components/CaptionEditor';
 import { VideoControls } from '@/components/VideoControls';
 import { normalizeCaptionTimings } from '@/lib/caption-utils';
 import type { CaptionData } from 'types';
+
+const LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'it', label: 'Italian' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'nl', label: 'Dutch' },
+  { code: 'tr', label: 'Turkish' },
+];
 
 interface CaptionedVideoHandle {
   seekTo: (time: number) => void;
@@ -39,13 +57,14 @@ const CaptionedVideo = forwardRef<
   CaptionedVideoHandle,
   {
     url: string;
-    captionData: CaptionData;
+    captionData?: CaptionData | null;
     onTimeUpdate?: (time: number) => void;
     onPlayingChange?: (isPlaying: boolean) => void;
     onDurationChange?: (duration: number) => void;
+    onBack?: () => void;
   }
 >(function CaptionedVideo(
-  { url, captionData, onTimeUpdate, onPlayingChange, onDurationChange },
+  { url, captionData, onTimeUpdate, onPlayingChange, onDurationChange, onBack },
   ref,
 ) {
   const player = useVideoPlayer(url, (p) => {
@@ -86,11 +105,13 @@ const CaptionedVideo = forwardRef<
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEventListener(player, 'statusChange', (({ status }: any) => {
     if (status === 'readyToPlay' && player.duration > 0) {
+      setVideoDuration(player.duration);
       onDurationChange?.(player.duration);
     }
   }) as any);
@@ -100,6 +121,7 @@ const CaptionedVideo = forwardRef<
     onPlayingChange?.(playing);
     // Also report duration on first play, in case statusChange missed it
     if (playing && player.duration > 0) {
+      setVideoDuration(player.duration);
       onDurationChange?.(player.duration);
     }
   });
@@ -125,11 +147,11 @@ const CaptionedVideo = forwardRef<
   const videoContent = (fullscreen: boolean) => (
     <View
       className={
-        fullscreen ? 'flex-1 bg-black' : 'w-full overflow-hidden bg-black'
+        fullscreen ? 'flex-1 bg-black' : 'w-full overflow-hidden bg-background'
       }
       style={
         !fullscreen
-          ? { height: Dimensions.get('window').height * 0.4 }
+          ? { height: Dimensions.get('window').height * 0.65 }
           : undefined
       }
     >
@@ -137,32 +159,58 @@ const CaptionedVideo = forwardRef<
         player={player}
         style={styles.video}
         contentFit="contain"
-        allowsFullscreen={false}
         allowsPictureInPicture={!fullscreen}
         nativeControls={false}
       />
 
-      {/* Tap target for fullscreen controls */}
-      {fullscreen && (
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
-          {showControls && (
-            <View className="absolute inset-0 items-center justify-center">
-              <TouchableOpacity
-                className="h-16 w-16 items-center justify-center rounded-full bg-overlay"
-                onPress={togglePlay}
-              >
-                {isPlaying ? (
-                  <Pause size={28} className="text-foreground" />
-                ) : (
-                  <Play size={28} className="text-foreground" fill="#fff" />
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-        </Pressable>
+      {/* Tap target to show/hide controls */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
+        {fullscreen && showControls && (
+          <View className="absolute inset-0 items-center justify-center">
+            <TouchableOpacity
+              className="h-16 w-16 items-center justify-center rounded-full bg-overlay"
+              onPress={togglePlay}
+            >
+              {isPlaying ? (
+                <Pause size={28} className="text-foreground" />
+              ) : (
+                <Play size={28} className="text-foreground" fill="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+      </Pressable>
+
+      {captionData && (
+        <CaptionOverlay currentTime={currentTime} captionData={captionData} />
       )}
 
-      <CaptionOverlay currentTime={currentTime} captionData={captionData} />
+      {/* Back button at top-left */}
+      {!fullscreen && onBack && (
+        <TouchableOpacity
+          className="absolute left-3 top-[50px] h-9 w-9 items-center justify-center rounded-full bg-primary"
+          onPress={onBack}
+        >
+          <ArrowLeft size={18} className="text-foreground" />
+        </TouchableOpacity>
+      )}
+
+      {/* Controls overlay at bottom of video */}
+      {(!fullscreen || showControls) && (
+        <View style={controlsOverlayStyles.bottom}>
+          <VideoControls
+            currentTime={currentTime}
+            duration={videoDuration}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+            onSeek={(time) => {
+              if (typeof time === 'number' && isFinite(time)) {
+                player.currentTime = time;
+              }
+            }}
+          />
+        </View>
+      )}
 
       {(!fullscreen || showControls) && (
         <TouchableOpacity
@@ -201,14 +249,15 @@ export default function StatusScreen() {
   const { videoId } = useLocalSearchParams<{ videoId: string }>();
   const { session } = useAuth();
   const router = useRouter();
-  const [status, setStatus] = useState('processing');
+  const [status, setStatus] = useState('uploaded');
   const [rawUrl, setRawUrl] = useState<string | null>(null);
-  const [processedUrl, setProcessedUrl] = useState<string | null>(null);
   const [captionData, setCaptionData] = useState<CaptionData | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoDuration, setVideoDuration] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [startingTranscription, setStartingTranscription] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<CaptionedVideoHandle>(null);
 
@@ -220,12 +269,13 @@ export default function StatusScreen() {
         const data = await getVideoStatus(videoId, session.access_token);
         setStatus(data.status);
         if (data.rawUrl) setRawUrl(data.rawUrl);
-        if (data.processedUrl) setProcessedUrl(data.processedUrl);
+
         if (data.captionData)
           setCaptionData(normalizeCaptionTimings(data.captionData));
 
-        // Stop polling once we have caption data or hit a terminal state
+        // Stop polling for resting/terminal states
         if (
+          data.status === 'uploaded' ||
           data.status === 'transcribed' ||
           data.status === 'completed' ||
           data.status === 'failed'
@@ -245,6 +295,38 @@ export default function StatusScreen() {
     };
   }, [videoId, session]);
 
+  const handleStartTranscription = async () => {
+    if (!videoId || !session) return;
+    setStartingTranscription(true);
+    try {
+      await processVideo(videoId, selectedLanguage, session.access_token);
+      setStatus('processing');
+
+      // Resume polling
+      intervalRef.current = setInterval(async () => {
+        try {
+          const data = await getVideoStatus(videoId, session.access_token);
+          setStatus(data.status);
+          if (data.rawUrl) setRawUrl(data.rawUrl);
+          if (data.captionData)
+            setCaptionData(normalizeCaptionTimings(data.captionData));
+          if (
+            data.status === 'transcribed' ||
+            data.status === 'completed' ||
+            data.status === 'failed'
+          ) {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+          }
+        } catch {
+          // keep polling
+        }
+      }, 5000);
+    } catch (error) {
+      console.error('Failed to start transcription:', error);
+      setStartingTranscription(false);
+    }
+  };
+
   const handleTimeUpdate = useCallback((time: number) => {
     setCurrentTime(time);
   }, []);
@@ -257,16 +339,8 @@ export default function StatusScreen() {
     videoRef.current?.pause();
   }, []);
 
-  const handlePlayingChange = useCallback((playing: boolean) => {
-    setIsVideoPlaying(playing);
-  }, []);
-
   const handleDurationChange = useCallback((duration: number) => {
     setVideoDuration(duration);
-  }, []);
-
-  const handleTogglePlay = useCallback(() => {
-    videoRef.current?.togglePlay();
   }, []);
 
   const handleExport = async () => {
@@ -281,7 +355,7 @@ export default function StatusScreen() {
         try {
           const data = await getVideoStatus(videoId, session.access_token);
           setStatus(data.status);
-          if (data.processedUrl) setProcessedUrl(data.processedUrl);
+
           if (data.status === 'completed' || data.status === 'failed') {
             if (intervalRef.current) clearInterval(intervalRef.current);
             setExporting(false);
@@ -295,6 +369,100 @@ export default function StatusScreen() {
       setExporting(false);
     }
   };
+
+  const selectedLangLabel =
+    LANGUAGES.find((l) => l.code === selectedLanguage)?.label ??
+    selectedLanguage;
+
+  if (status === 'uploaded') {
+    return (
+      <View className="flex-1 bg-background">
+        {/* Video preview (same player as transcribed, no captions) */}
+        {rawUrl && (
+          <CaptionedVideo
+            ref={videoRef}
+            url={rawUrl}
+            onTimeUpdate={handleTimeUpdate}
+            onDurationChange={handleDurationChange}
+            onBack={() => router.back()}
+          />
+        )}
+
+        {/* Language picker */}
+        <View className="px-5 pt-6">
+          <Text className="mb-2 text-base font-semibold text-foreground">
+            Select Language
+          </Text>
+          <Text className="mb-4 text-sm text-muted-foreground">
+            Choose the language spoken in the video
+          </Text>
+
+          <TouchableOpacity
+            className="flex-row items-center justify-between rounded-xl border border-border bg-secondary px-4 py-3.5"
+            onPress={() => setShowLanguagePicker(true)}
+          >
+            <Text className="text-base text-foreground">
+              {selectedLangLabel}
+            </Text>
+            <ChevronDown size={18} className="text-muted-foreground" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Language picker modal */}
+        <Modal
+          visible={showLanguagePicker}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowLanguagePicker(false)}
+        >
+          <View className="flex-1 bg-background">
+            <View className="flex-row items-center justify-between border-b border-b-border px-5 pb-4 pt-16">
+              <Text className="text-lg font-semibold text-foreground">
+                Select Language
+              </Text>
+              <TouchableOpacity onPress={() => setShowLanguagePicker(false)}>
+                <Text className="text-base font-medium text-accent">Done</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+              {LANGUAGES.map((lang) => (
+                <TouchableOpacity
+                  key={lang.code}
+                  className="flex-row items-center justify-between border-b border-b-border px-5 py-4"
+                  onPress={() => {
+                    setSelectedLanguage(lang.code);
+                    setShowLanguagePicker(false);
+                  }}
+                >
+                  <Text className="text-base text-foreground">
+                    {lang.label}
+                  </Text>
+                  {selectedLanguage === lang.code && (
+                    <View className="h-5 w-5 items-center justify-center rounded-full bg-primary">
+                      <Text className="text-xs text-foreground">✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Modal>
+
+        {/* Start Transcription button */}
+        <View className="absolute inset-x-0 bottom-0 border-t border-t-border bg-background px-5 pb-9 pt-3">
+          <TouchableOpacity
+            className={`items-center rounded-xl bg-primary py-4 ${startingTranscription ? 'opacity-50' : ''}`}
+            onPress={handleStartTranscription}
+            disabled={startingTranscription}
+          >
+            <Text className="text-lg font-semibold text-foreground">
+              {startingTranscription ? 'Starting...' : 'Start Transcription'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   if (status === 'processing') {
     return (
@@ -325,12 +493,22 @@ export default function StatusScreen() {
   }
 
   if (status === 'failed') {
+    const handleRetry = async () => {
+      if (!videoId || !session) return;
+      try {
+        await retryVideo(videoId, session.access_token);
+        setStatus('uploaded');
+      } catch (error) {
+        console.error('Failed to retry:', error);
+      }
+    };
+
     return (
       <View className="flex-1 items-center justify-center bg-background p-5">
         <Text className="mb-5 text-lg text-destructive">Processing failed</Text>
         <TouchableOpacity
           className="rounded-lg bg-primary px-8 py-3.5"
-          onPress={() => router.back()}
+          onPress={handleRetry}
         >
           <Text className="text-base font-semibold text-foreground">
             Try Again
@@ -344,39 +522,16 @@ export default function StatusScreen() {
   return (
     <View className="flex-1 bg-background">
       {/* Video pinned at top */}
-      {rawUrl && captionData && (
+      {rawUrl && (
         <CaptionedVideo
           ref={videoRef}
           url={rawUrl}
           captionData={captionData}
           onTimeUpdate={handleTimeUpdate}
-          onPlayingChange={handlePlayingChange}
           onDurationChange={handleDurationChange}
+          onBack={() => router.back()}
         />
       )}
-
-      {/* Custom playback controls */}
-      <VideoControls
-        currentTime={currentTime}
-        duration={videoDuration}
-        isPlaying={isVideoPlaying}
-        onTogglePlay={handleTogglePlay}
-        onSeek={handleSeekTo}
-      />
-
-      {/* Toolbar */}
-      <View className="flex-row items-center justify-between border-b border-b-border px-4 py-2">
-        <TouchableOpacity
-          className="flex-row items-center gap-1"
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={16} className="text-accent" />
-          <Text className="text-base font-medium text-accent">Back</Text>
-        </TouchableOpacity>
-        {processedUrl && (
-          <Text className="text-xs font-medium text-success">Exported</Text>
-        )}
-      </View>
 
       {/* Caption editor fills remaining space */}
       {captionData && session && (
@@ -416,5 +571,14 @@ const styles = StyleSheet.create({
   video: {
     width: '100%',
     height: '100%',
+  },
+});
+
+const controlsOverlayStyles = StyleSheet.create({
+  bottom: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 8,
   },
 });

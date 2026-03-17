@@ -19,7 +19,7 @@ app.use(express.json({ limit: "5mb" }));
 
 const WORKER_SECRET = process.env.WORKER_SECRET!;
 
-async function processVideo(videoId: string, rawUrl: string): Promise<void> {
+async function processVideo(videoId: string, rawUrl: string, language?: string): Promise<void> {
   const tmpDir = path.join("/tmp", videoId);
 
   try {
@@ -38,7 +38,7 @@ async function processVideo(videoId: string, rawUrl: string): Promise<void> {
     // Transcribe + align with WhisperX (accurate word-level timestamps)
     console.log(`[${videoId}] Running WhisperX via Replicate`);
     const audioBuffer = fs.readFileSync(audioPath);
-    const whisperxResult = await alignWithWhisperX(audioBuffer);
+    const whisperxResult = await alignWithWhisperX(audioBuffer, language);
     const captionData = buildCaptionDataFromWhisperX(whisperxResult);
     const durationSec = getWhisperXDuration(whisperxResult);
     console.log(`[${videoId}] WhisperX succeeded`);
@@ -118,7 +118,7 @@ async function exportVideo(
 }
 
 app.post("/process", (req, res) => {
-  const { videoId, rawUrl, secret } = req.body;
+  const { videoId, rawUrl, language, secret } = req.body;
 
   if (secret !== WORKER_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
@@ -133,7 +133,7 @@ app.post("/process", (req, res) => {
   // Respond immediately, process in background
   res.json({ status: "accepted" });
 
-  processVideo(videoId, rawUrl).catch((err) =>
+  processVideo(videoId, rawUrl, language).catch((err) =>
     console.error(`processVideo failed for ${videoId}:`, err)
   );
 });
