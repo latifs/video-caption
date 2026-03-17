@@ -137,7 +137,7 @@ const CaptionedVideo = forwardRef<
         player={player}
         style={styles.video}
         contentFit="contain"
-        // allowsFullscreen={false}
+        allowsFullscreen={false}
         allowsPictureInPicture={!fullscreen}
         nativeControls={false}
       />

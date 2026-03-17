@@ -7,8 +7,9 @@ import {
   Play,
   X,
 } from "lucide-react-native";
+import type { ComponentType } from "react";
 
-function iconWithClassName(icon: React.ComponentType<any>) {
+function iconWithClassName(icon: ComponentType<any>) {
   cssInterop(icon, {
     className: {
       target: "style",

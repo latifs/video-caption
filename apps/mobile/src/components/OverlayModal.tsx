@@ -1,12 +1,19 @@
 import { View, Text, TouchableOpacity, TextInput, Modal } from 'react-native';
 
-export interface OverlayModalState {
-  mode: 'add' | 'edit';
-  overlayId?: string;
-  text: string;
-  startText: string;
-  endText: string;
-}
+export type OverlayModalState =
+  | {
+      mode: 'add';
+      text: string;
+      startText: string;
+      endText: string;
+    }
+  | {
+      mode: 'edit';
+      overlayId: string;
+      text: string;
+      startText: string;
+      endText: string;
+    };
 
 interface OverlayModalProps {
   state: OverlayModalState | null;
@@ -90,7 +97,7 @@ export function OverlayModal({
           <View className="flex-row items-center gap-3">
             {state?.mode === 'edit' && (
               <TouchableOpacity
-                onPress={() => onDelete(state.overlayId!)}
+                onPress={() => onDelete(state.overlayId)}
                 className="px-4 py-2"
               >
                 <Text className="text-base font-semibold text-destructive">

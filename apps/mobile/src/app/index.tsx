@@ -41,8 +41,13 @@ export default function HomeScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const menuAnim = useSharedValue(0);
   const [uploading, setUploading] = useState(false);
+  const closeMenuTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openMenu = useCallback(() => {
+    if (closeMenuTimeout.current) {
+      clearTimeout(closeMenuTimeout.current);
+      closeMenuTimeout.current = null;
+    }
     setMenuVisible(true);
     menuAnim.value = withTiming(1, { duration: 280 });
   }, [menuAnim]);
@@ -50,7 +55,8 @@ export default function HomeScreen() {
   const closeMenu = useCallback(
     (onDone?: () => void) => {
       menuAnim.value = withTiming(0, { duration: 220 });
-      setTimeout(() => {
+      closeMenuTimeout.current = setTimeout(() => {
+        closeMenuTimeout.current = null;
         setMenuVisible(false);
         onDone?.();
       }, 220);
