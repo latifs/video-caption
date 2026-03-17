@@ -303,6 +303,7 @@ export default function StatusScreen() {
       setStatus('processing');
 
       // Resume polling
+      if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = setInterval(async () => {
         try {
           const data = await getVideoStatus(videoId, session.access_token);
@@ -323,6 +324,7 @@ export default function StatusScreen() {
       }, 5000);
     } catch (error) {
       console.error('Failed to start transcription:', error);
+    } finally {
       setStartingTranscription(false);
     }
   };
@@ -351,6 +353,7 @@ export default function StatusScreen() {
       setStatus('exporting');
 
       // Resume polling for export completion
+      if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = setInterval(async () => {
         try {
           const data = await getVideoStatus(videoId, session.access_token);

@@ -21,7 +21,21 @@ export async function GET(request: Request) {
 
 const postBodySchema = z.object({
   videoId: z.string().uuid(),
-  rawUrl: z.string().url(),
+  rawUrl: z
+    .string()
+    .url()
+    .refine(
+      (value) => {
+        try {
+          const url = new URL(value);
+          // Must be a Supabase storage URL for the videos bucket
+          return url.pathname.startsWith("/storage/v1/object/public/videos/raw/");
+        } catch {
+          return false;
+        }
+      },
+      { message: "rawUrl must point to a valid Supabase storage URL" }
+    ),
 });
 
 export async function POST(request: Request) {
