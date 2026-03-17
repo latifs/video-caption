@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -73,80 +72,37 @@ export default function UploadScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Upload Video</Text>
-      <Text style={styles.subtitle}>Pick a short video to add captions</Text>
+    <View className="flex-1 items-center justify-center bg-background p-5">
+      <Text className="mb-2 text-2xl font-bold text-foreground">
+        Upload Video
+      </Text>
+      <Text className="mb-8 text-base text-muted-foreground">
+        Pick a short video to add captions
+      </Text>
 
       <TouchableOpacity
-        style={[styles.button, uploading && styles.buttonDisabled]}
+        className={`w-full items-center rounded-xl bg-primary py-3.5 px-8 ${uploading ? 'opacity-60' : ''}`}
         onPress={handlePickAndUpload}
         disabled={uploading}
       >
         {uploading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Choose Video</Text>
+          <Text className="text-base font-semibold text-white">
+            Choose Video
+          </Text>
         )}
       </TouchableOpacity>
 
-      {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
+      {statusText ? (
+        <Text className="mt-5 text-sm text-muted-foreground">{statusText}</Text>
+      ) : null}
 
       {!uploading && (
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.backButtonText}>Back to Videos</Text>
+        <TouchableOpacity className="mt-5 py-2" onPress={() => router.back()}>
+          <Text className="text-base text-accent">Back to Videos</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    width: '100%',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  status: {
-    marginTop: 20,
-    fontSize: 14,
-    color: '#666',
-  },
-  backButton: {
-    marginTop: 20,
-    paddingVertical: 10,
-  },
-  backButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
-  },
-});

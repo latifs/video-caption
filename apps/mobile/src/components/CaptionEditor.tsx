@@ -8,13 +8,9 @@ import React, {
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Pressable,
   Alert,
-  Platform,
-  TextInput,
-  Modal,
   ScrollView,
   PanResponder,
   useWindowDimensions,
@@ -24,7 +20,15 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState,
 } from 'react-native';
-import { updateSpeechText, addOverlay, updateOverlay, deleteOverlay } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { EditWordModal } from './EditWordModal';
+import { OverlayModal, type OverlayModalState } from './OverlayModal';
+import {
+  updateSpeechText,
+  addOverlay,
+  updateOverlay,
+  deleteOverlay,
+} from '@/lib/api';
 import type { CaptionData, Overlay } from 'types';
 
 interface FlatWord {
@@ -78,13 +82,7 @@ export function CaptionEditor({
     wordIndex: number;
     text: string;
   } | null>(null);
-  const [overlayModal, setOverlayModal] = useState<{
-    mode: 'add' | 'edit';
-    overlayId?: string;
-    text: string;
-    startText: string;
-    endText: string;
-  } | null>(null);
+  const [overlayModal, setOverlayModal] = useState<OverlayModalState | null>(null);
   const [saving, setSaving] = useState(false);
   // Snapshot of measured word positions — stored in state so React re-renders overlays
   const [wordPosSnapshot, setWordPosSnapshot] = useState<
@@ -136,21 +134,15 @@ export function CaptionEditor({
   }, [segments]);
 
   // Compute time-proportional gaps between consecutive words.
-  // WhisperX quirks handled:
-  //  - Punctuation tokens ("?") have undefined start/end → interpolate from neighbors
-  //  - Segment-final words absorb silence (huge duration) → cap at MAX_WORD_DURATION_S
   const gapWidths = useMemo(() => {
-    // Build effective timestamps with missing values filled in
     const starts = flatWords.map((fw) => fw.start);
     const ends = flatWords.map((fw) => fw.end);
 
-    // Forward pass: fill missing start from previous end
     for (let i = 1; i < starts.length; i++) {
       if (!(starts[i] >= 0) && ends[i - 1] >= 0) {
         starts[i] = ends[i - 1];
       }
     }
-    // Backward pass: fill missing end from next start
     for (let i = ends.length - 2; i >= 0; i--) {
       if (!(ends[i] >= 0) && starts[i + 1] >= 0) {
         ends[i] = starts[i + 1];
@@ -163,13 +155,11 @@ export function CaptionEditor({
       const currEnd = ends[i];
       const nextStart = starts[i + 1];
 
-      // Still missing after interpolation → minimal gap
       if (!(currStart >= 0) || !(currEnd >= 0) || !(nextStart >= 0)) {
         gaps.push(MIN_GAP_PX);
         continue;
       }
 
-      // Cap word duration so absorbed silence becomes a visible gap
       const cappedEnd =
         currStart + Math.min(currEnd - currStart, MAX_WORD_DURATION_S);
       const timeGap = nextStart - cappedEnd;
@@ -178,15 +168,6 @@ export function CaptionEditor({
     return gaps;
   }, [flatWords]);
 
-  // Word positions persist across reference changes — onLayout overwrites stale
-  // entries when content actually changes, and stale entries beyond flatWords.length
-  // are never read. Clearing here would break auto-scroll because React Native
-  // does not re-fire onLayout when layout dimensions haven't changed.
-
-  // Find the active word by current playback time.
-  // Cap effective end at MAX_WORD_DURATION_S so segment-final words that absorb
-  // silence (WhisperX quirk) don't keep activeWordIndex stuck — the fallback
-  // timeToX interpolation handles the visual gap smoothly.
   const activeWordIndex = useMemo(() => {
     for (let i = 0; i < flatWords.length; i++) {
       const { start, end } = flatWords[i];
@@ -198,9 +179,6 @@ export function CaptionEditor({
     return -1;
   }, [flatWords, currentTime]);
 
-  // Trailing gap from the last word to the end of video, using the same
-  // capping rules as inter-word gaps so the timeline stays proportional.
-  // Walks backwards to skip punctuation tokens that have no timestamps.
   const trailingWidth = useMemo(() => {
     if (flatWords.length === 0 || duration <= 0) return 0;
     let lastStart = -1;
@@ -219,9 +197,6 @@ export function CaptionEditor({
     return Math.max(0, trailingGap * PX_PER_SECOND);
   }, [flatWords, duration]);
 
-  // Build a sorted list of { x, time } anchor points from measured word positions.
-  // Shared by both xToTime and timeToX. Filters out punctuation with undefined timestamps.
-  // Includes a trailing anchor at the end of the video computed from the last word position.
   const anchorPoints = useCallback(() => {
     const points: { x: number; time: number }[] = [];
     let lastMeasuredPos: { x: number; width: number } | null = null;
@@ -230,10 +205,9 @@ export function CaptionEditor({
       if (!pos) continue;
       lastMeasuredPos = pos;
       const t = flatWords[i].start;
-      if (!(t >= 0)) continue; // skip punctuation with undefined timestamps
+      if (!(t >= 0)) continue;
       points.push({ x: pos.x + pos.width / 2, time: t });
     }
-    // End-of-video anchor: last word right edge + trailing gap width
     if (lastMeasuredPos && trailingWidth > 0 && duration > 0) {
       points.push({
         x: lastMeasuredPos.x + lastMeasuredPos.width + trailingWidth,
@@ -243,7 +217,6 @@ export function CaptionEditor({
     return points;
   }, [flatWords, duration, trailingWidth]);
 
-  // Convert a scroll x position to an interpolated time using word positions
   const xToTime = useCallback(
     (scrollX: number) => {
       const points = anchorPoints();
@@ -251,7 +224,8 @@ export function CaptionEditor({
       points.sort((a, b) => a.x - b.x);
 
       if (scrollX <= points[0].x) return points[0].time;
-      if (scrollX >= points[points.length - 1].x) return points[points.length - 1].time;
+      if (scrollX >= points[points.length - 1].x)
+        return points[points.length - 1].time;
 
       for (let i = 0; i < points.length - 1; i++) {
         if (scrollX >= points[i].x && scrollX <= points[i + 1].x) {
@@ -264,7 +238,6 @@ export function CaptionEditor({
     [anchorPoints],
   );
 
-  // Convert a time to a scroll x position (inverse of xToTime)
   const timeToX = useCallback(
     (time: number) => {
       const points = anchorPoints();
@@ -272,7 +245,8 @@ export function CaptionEditor({
       points.sort((a, b) => a.time - b.time);
 
       if (time <= points[0].time) return points[0].x;
-      if (time >= points[points.length - 1].time) return points[points.length - 1].x;
+      if (time >= points[points.length - 1].time)
+        return points[points.length - 1].x;
 
       for (let i = 0; i < points.length - 1; i++) {
         if (time >= points[i].time && time <= points[i + 1].time) {
@@ -286,11 +260,10 @@ export function CaptionEditor({
     [anchorPoints],
   );
 
-  // Auto-scroll: center the active word, fall back to interpolation for silence gaps
+  // Auto-scroll
   useEffect(() => {
     if (isUserScrolling.current) return;
 
-    // Primary: direct position lookup for the active word
     if (activeWordIndex >= 0) {
       const pos = wordPositions.current.get(activeWordIndex);
       if (pos) {
@@ -302,7 +275,6 @@ export function CaptionEditor({
       }
     }
 
-    // Fallback: interpolate for silence gaps between words
     const targetX = timeToX(currentTime);
     if (targetX != null) {
       scrollViewRef.current?.scrollTo({
@@ -312,13 +284,11 @@ export function CaptionEditor({
     }
   }, [currentTime, activeWordIndex, timeToX]);
 
-  // --- ScrollView handlers for user-initiated scrubbing ---
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetX = event.nativeEvent.contentOffset.x;
       if (!isUserScrolling.current) return;
 
-      // Throttle seek calls to max 1 per 50ms for smooth time updates
       const now = Date.now();
       if (now - lastSeekTime.current < 50) return;
       lastSeekTime.current = now;
@@ -342,12 +312,10 @@ export function CaptionEditor({
     }, 300);
   }, []);
 
-  // Measure each word's position for playhead hit-testing + overlay positioning
   const handleWordLayout = useCallback(
     (flatIndex: number, event: LayoutChangeEvent) => {
       const { x, width } = event.nativeEvent.layout;
       wordPositions.current.set(flatIndex, { x, width });
-      // Snapshot to state once all words are measured (triggers overlay render)
       if (wordPositions.current.size >= flatWords.length) {
         setWordPosSnapshot(new Map(wordPositions.current));
       }
@@ -355,7 +323,6 @@ export function CaptionEditor({
     [flatWords.length],
   );
 
-  // --- Word interactions ---
   const handleWordSeek = (flatWord: FlatWord) => {
     onSeekTo(flatWord.start);
     const pos = wordPositions.current.get(flatWord.flatIndex);
@@ -369,35 +336,11 @@ export function CaptionEditor({
   };
 
   const handleWordEdit = (flatWord: FlatWord) => {
-    if (Platform.OS === 'ios') {
-      Alert.prompt(
-        'Edit Word',
-        `Change "${flatWord.word}" to:`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Save',
-            onPress: (newText?: string) => {
-              if (newText !== undefined && newText !== flatWord.word) {
-                submitWordEdit(
-                  flatWord.segmentIndex,
-                  flatWord.wordIndex,
-                  newText,
-                );
-              }
-            },
-          },
-        ],
-        'plain-text',
-        flatWord.word,
-      );
-    } else {
-      setEditModal({
-        segmentIndex: flatWord.segmentIndex,
-        wordIndex: flatWord.wordIndex,
-        text: flatWord.word,
-      });
-    }
+    setEditModal({
+      segmentIndex: flatWord.segmentIndex,
+      wordIndex: flatWord.wordIndex,
+      text: flatWord.word,
+    });
   };
 
   const submitWordEdit = async (
@@ -508,7 +451,10 @@ export function CaptionEditor({
       }
       setOverlayModal(null);
     } catch {
-      Alert.alert('Error', mode === 'add' ? 'Failed to add overlay.' : 'Failed to update overlay.');
+      Alert.alert(
+        'Error',
+        mode === 'add' ? 'Failed to add overlay.' : 'Failed to update overlay.',
+      );
     } finally {
       setSaving(false);
     }
@@ -567,9 +513,7 @@ export function CaptionEditor({
         onPanResponderGrant: () => {
           isDraggingChip.current = true;
           setDragging({ overlayId: overlay.id, startX: leftPos, dx: 0 });
-          // Start long-press timer
           longPressTimer.current = setTimeout(() => {
-            // Only open modal if we haven't started dragging
             const cur = draggingRef.current;
             if (cur && Math.abs(cur.dx) < 5) {
               isDraggingChip.current = false;
@@ -582,20 +526,16 @@ export function CaptionEditor({
           _: GestureResponderEvent,
           gs: PanResponderGestureState,
         ) => {
-          // Cancel long-press if moved significantly
           if (Math.abs(gs.dx) > 5 && longPressTimer.current) {
             clearTimeout(longPressTimer.current);
             longPressTimer.current = null;
           }
-          setDragging((prev) =>
-            prev ? { ...prev, dx: gs.dx } : null,
-          );
+          setDragging((prev) => (prev ? { ...prev, dx: gs.dx } : null));
         },
         onPanResponderRelease: (
           _: GestureResponderEvent,
           gs: PanResponderGestureState,
         ) => {
-          // Clear long-press timer
           if (longPressTimer.current) {
             clearTimeout(longPressTimer.current);
             longPressTimer.current = null;
@@ -608,21 +548,17 @@ export function CaptionEditor({
             return;
           }
 
-          // Tap: minimal movement
           if (Math.abs(gs.dx) < 5) {
             setDragging(null);
             onSeekTo(overlay.start);
             return;
           }
 
-          // Drag: compute new position
           const newX = cur.startX + gs.dx;
           const newTime = xToTime(newX);
           if (newTime != null) {
             const cd = captionDataRef.current;
-            const ov = cd.overlayTrack.find(
-              (o) => o.id === cur.overlayId,
-            );
+            const ov = cd.overlayTrack.find((o) => o.id === cur.overlayId);
             if (ov) {
               const duration = ov.end - ov.start;
               const newStart = Math.max(0, newTime);
@@ -654,28 +590,41 @@ export function CaptionEditor({
           setDragging(null);
         },
       }),
-    [xToTime, onCaptionDataChange, onSeekTo, videoId, accessToken, handleEditOverlay],
+    [
+      xToTime,
+      onCaptionDataChange,
+      onSeekTo,
+      videoId,
+      accessToken,
+      handleEditOverlay,
+    ],
   );
 
   // --- Render ---
   if (flatWords.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.emptyText}>No captions detected</Text>
+      <View className="flex-1 p-4">
+        <Text className="mt-5 text-center text-base text-muted-foreground">
+          No captions detected
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View className="flex-1 p-4">
       {/* Time label row */}
-      <View style={styles.timeLabel}>
-        <Text style={styles.timeLabelText}>{formatTime(currentTime)}</Text>
-        <Text style={styles.tapHint}>Tap to seek · Hold to edit · Drag to move</Text>
+      <View className="mb-2 flex-row items-center justify-between">
+        <Text className="text-sm font-semibold text-muted-foreground">
+          {formatTime(currentTime)}
+        </Text>
+        <Text className="text-xs text-muted-foreground">
+          Tap to seek · Hold to edit · Drag to move
+        </Text>
       </View>
 
-      {/* Horizontal timeline with playhead — both rows in one ScrollView */}
-      <View style={styles.timelineContainer}>
+      {/* Horizontal timeline with playhead */}
+      <View className="mb-2 overflow-hidden rounded-xl border-2 border-primary bg-primary/[0.08]">
         <ScrollView
           ref={scrollViewRef}
           horizontal
@@ -690,7 +639,7 @@ export function CaptionEditor({
         >
           <View>
             {/* Speech row */}
-            <View style={styles.speechRow}>
+            <View className="min-h-[40px] flex-row items-center">
               {flatWords.map((fw, idx) => (
                 <React.Fragment key={fw.flatIndex}>
                   <Pressable
@@ -698,62 +647,67 @@ export function CaptionEditor({
                     onPress={() => handleWordSeek(fw)}
                     onLongPress={() => handleWordEdit(fw)}
                     disabled={saving}
-                    style={[
-                      styles.timelineWord,
-                      activeWordIndex === fw.flatIndex &&
-                        styles.timelineWordActive,
-                    ]}
+                    className={cn(
+                      'rounded bg-white/[0.08] px-1.5 py-1',
+                      activeWordIndex === fw.flatIndex && 'bg-primary',
+                    )}
                   >
                     <Text
-                      style={[
-                        styles.wordText,
-                        activeWordIndex === fw.flatIndex && styles.wordTextActive,
-                        saving && styles.wordSaving,
-                      ]}
+                      className={cn(
+                        'text-base text-foreground',
+                        activeWordIndex === fw.flatIndex && 'text-white',
+                        saving && 'opacity-50',
+                      )}
                     >
                       {fw.word}
                     </Text>
                   </Pressable>
                   {idx < flatWords.length - 1 && (
-                    <View style={{ width: gapWidths[idx], alignSelf: 'stretch' }} />
+                    <View
+                      style={{ width: gapWidths[idx], alignSelf: 'stretch' }}
+                    />
                   )}
                 </React.Fragment>
               ))}
-              {/* Trailing spacer for silence after the last word */}
               {trailingWidth > 0 && (
                 <View style={{ width: trailingWidth, alignSelf: 'stretch' }} />
               )}
             </View>
 
-            {/* Overlay row — draggable chips positioned at the matching word's x */}
+            {/* Overlay row */}
             {sortedOverlays.length > 0 && wordPosSnapshot.size > 0 && (
-              <View style={styles.overlayRow}>
+              <View className="h-[30px] border-t border-t-white/15">
                 {sortedOverlays.map((overlay) => {
                   const isActive =
                     currentTime >= overlay.start && currentTime <= overlay.end;
                   const leftPos = getOverlayLeftPos(overlay);
                   const isDraggingThis = dragging?.overlayId === overlay.id;
-                  const chipLeft = isDraggingThis && dragging
-                    ? dragging.startX + dragging.dx
-                    : leftPos;
+                  const chipLeft =
+                    isDraggingThis && dragging
+                      ? dragging.startX + dragging.dx
+                      : leftPos;
                   const panResponder = createChipPanResponder(overlay, leftPos);
                   return (
                     <View
                       key={overlay.id}
-                      style={[
-                        styles.overlayChipWrapper,
-                        { left: chipLeft },
-                        isDraggingThis && styles.overlayChipDragging,
-                      ]}
+                      className={cn(
+                        'absolute top-0.5',
+                        isDraggingThis &&
+                          'z-10 opacity-85 shadow-md shadow-primary/30',
+                      )}
+                      style={{ left: chipLeft }}
                       {...panResponder.panHandlers}
                     >
                       <View
-                        style={[
-                          styles.overlayChip,
-                          isActive && styles.overlayChipActive,
-                        ]}
+                        className={cn(
+                          'max-w-[100px] rounded border border-primary-muted bg-primary-muted px-2 py-0.5',
+                          isActive && 'border-primary bg-primary-muted',
+                        )}
                       >
-                        <Text style={styles.overlayChipText} numberOfLines={1}>
+                        <Text
+                          className="text-xs font-semibold text-violet-300"
+                          numberOfLines={1}
+                        >
                           {overlay.text}
                         </Text>
                       </View>
@@ -764,325 +718,36 @@ export function CaptionEditor({
             )}
           </View>
         </ScrollView>
-
       </View>
 
       {/* Add overlay */}
-      <TouchableOpacity style={styles.addButton} onPress={handleAddOverlay}>
-        <Text style={styles.addButtonText}>
+      <TouchableOpacity
+        className="items-center rounded-lg border border-dashed border-input py-2"
+        onPress={handleAddOverlay}
+      >
+        <Text className="text-sm text-muted-foreground">
           + Add overlay at {formatTime(currentTime)}
         </Text>
       </TouchableOpacity>
 
-      {/* Android word-edit modal */}
-      <Modal visible={editModal !== null} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Word</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={editModal?.text ?? ''}
-              onChangeText={(t) =>
-                setEditModal((prev) => (prev ? { ...prev, text: t } : null))
-              }
-              autoFocus
-              selectTextOnFocus
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                onPress={() => setEditModal(null)}
-                style={styles.modalButton}
-              >
-                <Text style={styles.modalButtonCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleEditModalSave}
-                style={styles.modalButton}
-              >
-                <Text style={styles.modalButtonSave}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <EditWordModal
+        visible={editModal !== null}
+        value={editModal?.text ?? ''}
+        onChangeText={(t) =>
+          setEditModal((prev) => (prev ? { ...prev, text: t } : null))
+        }
+        onCancel={() => setEditModal(null)}
+        onSave={handleEditModalSave}
+      />
 
-      {/* Unified overlay modal (add + edit) */}
-      <Modal visible={overlayModal !== null} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {overlayModal?.mode === 'edit' ? 'Edit Overlay' : 'Add Overlay'}
-            </Text>
-
-            <Text style={styles.modalFieldLabel}>Text</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={overlayModal?.text ?? ''}
-              onChangeText={(t) =>
-                setOverlayModal((prev) =>
-                  prev ? { ...prev, text: t } : null,
-                )
-              }
-              placeholder="Overlay text..."
-              autoFocus
-            />
-
-            <View style={styles.timeInputRow}>
-              <View style={styles.timeInputGroup}>
-                <Text style={styles.modalFieldLabel}>Start (sec)</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={overlayModal?.startText ?? ''}
-                  onChangeText={(t) =>
-                    setOverlayModal((prev) =>
-                      prev ? { ...prev, startText: t } : null,
-                    )
-                  }
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <View style={styles.timeInputGroup}>
-                <Text style={styles.modalFieldLabel}>End (sec)</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={overlayModal?.endText ?? ''}
-                  onChangeText={(t) =>
-                    setOverlayModal((prev) =>
-                      prev ? { ...prev, endText: t } : null,
-                    )
-                  }
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
-
-            {overlayModal && (
-              <Text style={styles.durationLabel}>
-                Duration:{' '}
-                {(() => {
-                  const s = parseFloat(overlayModal.startText);
-                  const e = parseFloat(overlayModal.endText);
-                  if (isNaN(s) || isNaN(e) || e <= s) return '—';
-                  return `${(e - s).toFixed(1)}s`;
-                })()}
-              </Text>
-            )}
-
-            <View style={styles.modalButtons}>
-              {overlayModal?.mode === 'edit' && (
-                <TouchableOpacity
-                  onPress={() => handleDeleteOverlay(overlayModal.overlayId!)}
-                  style={styles.modalButton}
-                >
-                  <Text style={styles.modalButtonDelete}>Delete</Text>
-                </TouchableOpacity>
-              )}
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity
-                onPress={() => setOverlayModal(null)}
-                style={styles.modalButton}
-              >
-                <Text style={styles.modalButtonCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={submitOverlayModal}
-                style={styles.modalButton}
-                disabled={saving}
-              >
-                <Text
-                  style={[styles.modalButtonSave, saving && { opacity: 0.5 }]}
-                >
-                  {saving
-                    ? 'Saving...'
-                    : overlayModal?.mode === 'edit'
-                      ? 'Save'
-                      : 'Add'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <OverlayModal
+        state={overlayModal}
+        saving={saving}
+        onChange={setOverlayModal}
+        onCancel={() => setOverlayModal(null)}
+        onSubmit={submitOverlayModal}
+        onDelete={handleDeleteOverlay}
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  timeLabel: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  timeLabelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  tapHint: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.35)',
-  },
-  timelineContainer: {
-    borderWidth: 2,
-    borderColor: '#8B5CF6',
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    marginBottom: 8,
-    overflow: 'hidden',
-  },
-  speechRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 40,
-  },
-  overlayRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.15)',
-    height: 30,
-  },
-  timelineWord: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  timelineWordActive: {
-    backgroundColor: '#8B5CF6',
-  },
-  wordText: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  wordTextActive: {
-    color: '#fff',
-  },
-  wordSaving: {
-    opacity: 0.5,
-  },
-  overlayChipWrapper: {
-    position: 'absolute',
-    top: 2,
-  },
-  overlayChipDragging: {
-    opacity: 0.85,
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-    zIndex: 10,
-  },
-  overlayChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
-    maxWidth: 100,
-  },
-  overlayChipActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.3)',
-    borderColor: '#8B5CF6',
-  },
-  overlayChipText: {
-    fontSize: 12,
-    color: '#C4B5FD',
-    fontWeight: '600',
-  },
-  addButton: {
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    borderStyle: 'dashed',
-  },
-  addButtonText: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 14,
-  },
-  // Modals
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 12,
-    padding: 20,
-    width: '85%',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 12,
-    color: '#fff',
-  },
-  modalFieldLabel: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: 4,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    marginBottom: 12,
-    color: '#fff',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  timeInputRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  timeInputGroup: {
-    flex: 1,
-  },
-  durationLabel: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.4)',
-    marginBottom: 12,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  modalButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  modalButtonCancel: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.5)',
-  },
-  modalButtonSave: {
-    fontSize: 16,
-    color: '#A78BFA',
-    fontWeight: '600',
-  },
-  modalButtonDelete: {
-    fontSize: 16,
-    color: '#EF4444',
-    fontWeight: '600',
-  },
-});

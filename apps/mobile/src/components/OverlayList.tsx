@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Modal,
   TextInput,
   Alert,
-} from "react-native";
-import { addOverlay, deleteOverlay } from "@/lib/api";
-import type { CaptionData } from "types";
+} from 'react-native';
+import { X } from '@/lib/icons';
+import { addOverlay, deleteOverlay } from '@/lib/api';
+import type { CaptionData } from 'types';
 
 interface OverlayListProps {
   captionData: CaptionData;
@@ -22,7 +22,7 @@ interface OverlayListProps {
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 export function OverlayList({
@@ -33,31 +33,31 @@ export function OverlayList({
   onCaptionDataChange,
 }: OverlayListProps) {
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newText, setNewText] = useState("");
-  const [newStart, setNewStart] = useState("");
-  const [newEnd, setNewEnd] = useState("");
+  const [newText, setNewText] = useState('');
+  const [newStart, setNewStart] = useState('');
+  const [newEnd, setNewEnd] = useState('');
   const [saving, setSaving] = useState(false);
 
   const overlays = captionData.overlayTrack;
 
   const handleDelete = (overlayId: string) => {
-    Alert.alert("Delete Overlay", "Remove this overlay?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert('Delete Overlay', 'Remove this overlay?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: "Delete",
-        style: "destructive",
+        text: 'Delete',
+        style: 'destructive',
         onPress: async () => {
           try {
             await deleteOverlay(videoId, overlayId, accessToken);
             onCaptionDataChange({
               ...captionData,
               overlayTrack: captionData.overlayTrack.filter(
-                (o) => o.id !== overlayId
+                (o) => o.id !== overlayId,
               ),
             });
           } catch (error) {
-            Alert.alert("Error", "Failed to delete overlay.");
-            console.error("Failed to delete overlay:", error);
+            Alert.alert('Error', 'Failed to delete overlay.');
+            console.error('Failed to delete overlay:', error);
           }
         },
       },
@@ -69,17 +69,17 @@ export function OverlayList({
     const end = parseFloat(newEnd);
 
     if (!newText.trim()) {
-      Alert.alert("Error", "Text cannot be empty.");
+      Alert.alert('Error', 'Text cannot be empty.');
       return;
     }
     if (isNaN(start) || isNaN(end) || start < 0 || end <= start) {
-      Alert.alert("Error", "Enter valid start and end times (in seconds).");
+      Alert.alert('Error', 'Enter valid start and end times (in seconds).');
       return;
     }
     if (end > durationSec) {
       Alert.alert(
-        "Error",
-        `End time cannot exceed video duration (${formatTime(durationSec)}).`
+        'Error',
+        `End time cannot exceed video duration (${formatTime(durationSec)}).`,
       );
       return;
     }
@@ -89,114 +89,122 @@ export function OverlayList({
       const result = await addOverlay(
         videoId,
         { text: newText.trim(), start, end },
-        accessToken
+        accessToken,
       );
       onCaptionDataChange({
         ...captionData,
         overlayTrack: [...captionData.overlayTrack, result.overlay],
       });
       setShowAddModal(false);
-      setNewText("");
-      setNewStart("");
-      setNewEnd("");
+      setNewText('');
+      setNewStart('');
+      setNewEnd('');
     } catch (error) {
-      Alert.alert("Error", "Failed to add overlay.");
-      console.error("Failed to add overlay:", error);
+      Alert.alert('Error', 'Failed to add overlay.');
+      console.error('Failed to add overlay:', error);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Overlays</Text>
+    <View className="border-t border-t-border px-4 py-3">
+      <Text className="mb-3 text-base font-bold text-foreground">Overlays</Text>
 
       {overlays.length === 0 && (
-        <Text style={styles.emptyText}>No overlays yet</Text>
+        <Text className="mb-2 text-sm text-muted-foreground">
+          No overlays yet
+        </Text>
       )}
 
       {overlays.map((overlay) => (
-        <View key={overlay.id} style={styles.overlayRow}>
-          <View style={styles.overlayInfo}>
-            <Text style={styles.overlayText} numberOfLines={1}>
+        <View
+          key={overlay.id}
+          className="mb-1.5 flex-row items-center rounded-md bg-secondary px-2 py-2"
+        >
+          <View className="flex-1">
+            <Text className="text-base text-foreground" numberOfLines={1}>
               {overlay.text}
             </Text>
-            <Text style={styles.overlayTime}>
+            <Text className="mt-0.5 text-xs text-muted-foreground">
               {formatTime(overlay.start)} – {formatTime(overlay.end)}
             </Text>
           </View>
           <TouchableOpacity
             onPress={() => handleDelete(overlay.id)}
-            style={styles.deleteButton}
+            className="ml-2 h-8 w-8 items-center justify-center rounded-full bg-destructive/10"
           >
-            <Text style={styles.deleteButtonText}>✕</Text>
+            <X size={14} className="text-destructive" />
           </TouchableOpacity>
         </View>
       ))}
 
       <TouchableOpacity
-        style={styles.addButton}
+        className="mt-1 items-center rounded-md border border-dashed border-primary py-2"
         onPress={() => setShowAddModal(true)}
       >
-        <Text style={styles.addButtonText}>+ Add Overlay</Text>
+        <Text className="text-base font-medium text-accent">+ Add Overlay</Text>
       </TouchableOpacity>
 
       <Modal visible={showAddModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Overlay</Text>
+        <View className="flex-1 items-center justify-center bg-overlay">
+          <View className="w-[85%] rounded-xl border border-border bg-popover p-5">
+            <Text className="mb-4 text-lg font-semibold text-foreground">
+              Add Overlay
+            </Text>
 
-            <Text style={styles.fieldLabel}>Text</Text>
+            <Text className="mb-1 text-xs text-muted-foreground">Text</Text>
             <TextInput
-              style={styles.modalInput}
+              className="mb-3 rounded-lg border border-input bg-secondary px-3 py-2 text-base text-foreground"
               value={newText}
               onChangeText={setNewText}
               placeholder="Overlay text"
               autoFocus
             />
 
-            <Text style={styles.fieldLabel}>Start time (seconds)</Text>
+            <Text className="mb-1 text-xs text-muted-foreground">
+              Start time (seconds)
+            </Text>
             <TextInput
-              style={styles.modalInput}
+              className="mb-3 rounded-lg border border-input bg-secondary px-3 py-2 text-base text-foreground"
               value={newStart}
               onChangeText={setNewStart}
               placeholder="0"
               keyboardType="numeric"
             />
 
-            <Text style={styles.fieldLabel}>End time (seconds)</Text>
+            <Text className="mb-1 text-xs text-muted-foreground">
+              End time (seconds)
+            </Text>
             <TextInput
-              style={styles.modalInput}
+              className="mb-3 rounded-lg border border-input bg-secondary px-3 py-2 text-base text-foreground"
               value={newEnd}
               onChangeText={setNewEnd}
               placeholder={String(Math.min(5, durationSec))}
               keyboardType="numeric"
             />
 
-            <View style={styles.modalButtons}>
+            <View className="mt-1 flex-row justify-end gap-3">
               <TouchableOpacity
                 onPress={() => {
                   setShowAddModal(false);
-                  setNewText("");
-                  setNewStart("");
-                  setNewEnd("");
+                  setNewText('');
+                  setNewStart('');
+                  setNewEnd('');
                 }}
-                style={styles.modalButton}
+                className="px-4 py-2"
               >
-                <Text style={styles.modalButtonCancel}>Cancel</Text>
+                <Text className="text-base text-muted-foreground">Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleAdd}
-                style={styles.modalButton}
+                className="px-4 py-2"
                 disabled={saving}
               >
                 <Text
-                  style={[
-                    styles.modalButtonSave,
-                    saving && { opacity: 0.5 },
-                  ]}
+                  className={`text-base font-semibold text-accent ${saving ? 'opacity-50' : ''}`}
                 >
-                  {saving ? "Adding..." : "Add"}
+                  {saving ? 'Adding...' : 'Add'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -206,122 +214,3 @@ export function OverlayList({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e0e0e0",
-  },
-  heading: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 12,
-    color: "#333",
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#999",
-    marginBottom: 8,
-  },
-  overlayRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  overlayInfo: {
-    flex: 1,
-  },
-  overlayText: {
-    fontSize: 15,
-    color: "#222",
-  },
-  overlayTime: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 2,
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 59, 48, 0.1)",
-    marginLeft: 8,
-  },
-  deleteButtonText: {
-    color: "#FF3B30",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  addButton: {
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#007AFF",
-    borderStyle: "dashed",
-    marginTop: 4,
-  },
-  addButtonText: {
-    color: "#007AFF",
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    width: "85%",
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    marginBottom: 16,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    color: "#666",
-    marginBottom: 4,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    marginTop: 4,
-  },
-  modalButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  modalButtonCancel: {
-    fontSize: 16,
-    color: "#999",
-  },
-  modalButtonSave: {
-    fontSize: 16,
-    color: "#007AFF",
-    fontWeight: "600",
-  },
-});

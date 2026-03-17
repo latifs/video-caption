@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import type { CaptionData, SpeechWord } from 'types';
 import {
   findActiveSegment,
@@ -79,16 +79,16 @@ export function CaptionOverlay({
     : -1;
 
   return (
-    <View style={styles.container} pointerEvents="none">
+    <View className="absolute inset-0" pointerEvents="none">
       {/* Speech captions */}
       {activeSegment && visibleWords.length > 0 && (
-        <View style={styles.speechContainer}>
-          <View style={styles.speechBackground}>
-            <Text style={styles.speechText}>
+        <View className="absolute bottom-[10%] left-4 right-4 items-center">
+          <View className="rounded bg-overlay px-3 py-1.5">
+            <Text className="text-center text-base text-white">
               {visibleWords.map((word, i) => (
                 <Text
                   key={`${word.start}-${i}`}
-                  style={i === activeWordIndex ? styles.activeWord : undefined}
+                  style={i === activeWordIndex ? { color: '#FFD700' } : undefined}
                 >
                   {i > 0 ? ' ' : ''}
                   {word.word}
@@ -103,36 +103,30 @@ export function CaptionOverlay({
       {activeOverlays.map((overlay) => (
         <View
           key={overlay.id}
-          style={[
-            styles.overlayContainer,
-            {
-              top: `${overlay.position.y * 100}%`,
-              alignItems:
-                overlay.position.x === 'left'
-                  ? 'flex-start'
-                  : overlay.position.x === 'right'
-                    ? 'flex-end'
-                    : 'center',
-            },
-          ]}
+          className="absolute left-4 right-4"
+          style={{
+            top: `${overlay.position.y * 100}%`,
+            alignItems:
+              overlay.position.x === 'left'
+                ? 'flex-start'
+                : overlay.position.x === 'right'
+                  ? 'flex-end'
+                  : 'center',
+          }}
         >
           <View
-            style={[
-              styles.overlayBackground,
-              {
-                backgroundColor: overlay.style.backgroundColor,
-                opacity: overlay.style.backgroundOpacity,
-              },
-            ]}
+            className="absolute inset-0 rounded"
+            style={{
+              backgroundColor: overlay.style.backgroundColor,
+              opacity: overlay.style.backgroundOpacity,
+            }}
           />
           <Text
-            style={[
-              styles.overlayText,
-              {
-                fontSize: overlay.style.fontSize,
-                color: overlay.style.color,
-              },
-            ]}
+            className="px-2 py-1 text-center"
+            style={{
+              fontSize: overlay.style.fontSize,
+              color: overlay.style.color,
+            }}
           >
             {overlay.text}
           </Text>
@@ -141,45 +135,3 @@ export function CaptionOverlay({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  speechContainer: {
-    position: 'absolute',
-    bottom: '10%',
-    left: 16,
-    right: 16,
-    alignItems: 'center',
-  },
-  speechBackground: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-  },
-  speechText: {
-    color: '#ffffff',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  activeWord: {
-    fontWeight: 'normal',
-    color: '#FFD700',
-  },
-  overlayContainer: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-  },
-  overlayBackground: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 4,
-  },
-  overlayText: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    textAlign: 'center',
-  },
-});

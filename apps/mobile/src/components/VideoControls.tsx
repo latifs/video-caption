@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   PanResponder,
   type LayoutChangeEvent,
   type GestureResponderEvent,
-} from "react-native";
+} from 'react-native';
+import { Play, Pause } from '@/lib/icons';
 
 interface VideoControlsProps {
   currentTime: number;
@@ -20,7 +21,7 @@ interface VideoControlsProps {
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 export function VideoControls({
@@ -100,16 +101,17 @@ export function VideoControls({
   const disabled = duration <= 0;
 
   return (
-    <View style={styles.container}>
+    <View className="bg-neutral-900 px-4 pb-2 pt-3">
       {/* Seek bar */}
       <View
         style={[styles.trackOuter, disabled && styles.trackDisabled]}
         onLayout={handleTrackLayout}
         {...(disabled ? {} : panResponder.panHandlers)}
       >
-        <View style={styles.trackBackground}>
+        <View className="h-1 overflow-hidden rounded-sm bg-secondary">
           <View
-            style={[styles.trackFill, { width: `${clampedProgress * 100}%` }]}
+            className="h-full rounded-sm bg-primary"
+            style={{ width: `${clampedProgress * 100}%` }}
           />
         </View>
         {!disabled && (
@@ -125,28 +127,28 @@ export function VideoControls({
       </View>
 
       {/* Bottom row: time + play/pause */}
-      <View style={styles.bottomRow}>
-        <Text style={styles.timeText}>
-          {formatTime(isSeeking ? seekPosition : currentTime)} /{" "}
+      <View className="mt-1 flex-row items-center justify-between">
+        <Text
+          className="flex-1 text-xs text-muted-foreground"
+          style={{ fontVariant: ['tabular-nums'] }}
+        >
+          {formatTime(isSeeking ? seekPosition : currentTime)} /{' '}
           {formatTime(duration)}
         </Text>
 
         <Pressable
-          style={styles.playButton}
+          className="h-11 w-11 items-center justify-center rounded-full bg-secondary"
           onPress={onTogglePlay}
         >
           {isPlaying ? (
-            <View style={styles.pauseIcon}>
-              <View style={styles.pauseBar} />
-              <View style={styles.pauseBar} />
-            </View>
+            <Pause size={16} className="text-primary" />
           ) : (
-            <View style={styles.playIcon} />
+            <Play size={16} className="text-primary" />
           )}
         </Pressable>
 
         {/* Spacer to balance layout */}
-        <View style={styles.spacer} />
+        <View className="flex-1" />
       </View>
     </View>
   );
@@ -155,81 +157,20 @@ export function VideoControls({
 const THUMB_SIZE = 16;
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "#1a1a1a",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
   trackOuter: {
     height: 30,
-    justifyContent: "center",
+    justifyContent: 'center',
   },
   trackDisabled: {
     opacity: 0.4,
   },
-  trackBackground: {
-    height: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  trackFill: {
-    height: "100%",
-    backgroundColor: "#8B5CF6",
-    borderRadius: 2,
-  },
   thumb: {
-    position: "absolute",
+    position: 'absolute',
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    backgroundColor: "#8B5CF6",
+    backgroundColor: '#8B5CF6',
     marginLeft: -THUMB_SIZE / 2,
     top: (30 - THUMB_SIZE) / 2,
-  },
-  bottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  timeText: {
-    color: "rgba(255, 255, 255, 0.7)",
-    fontSize: 13,
-    fontVariant: ["tabular-nums"],
-    flex: 1,
-  },
-  playButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playIcon: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 14,
-    borderTopWidth: 9,
-    borderBottomWidth: 9,
-    borderLeftColor: "#8B5CF6",
-    borderTopColor: "transparent",
-    borderBottomColor: "transparent",
-    marginLeft: 3,
-  },
-  pauseIcon: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  pauseBar: {
-    width: 4,
-    height: 16,
-    backgroundColor: "#8B5CF6",
-    borderRadius: 1,
-  },
-  spacer: {
-    flex: 1,
   },
 });
