@@ -7,19 +7,25 @@ const MAX_WORD_DURATION_S = 0.8;
 
 /** Format seconds as ASS timestamp: H:MM:SS.cc */
 function formatAssTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const cs = Math.round((seconds % 1) * 100);
+  const totalCs = Math.round(seconds * 100);
+  const h = Math.floor(totalCs / 360000);
+  const m = Math.floor((totalCs % 360000) / 6000);
+  const s = Math.floor((totalCs % 6000) / 100);
+  const cs = totalCs % 100;
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
 }
 
 /**
- * Convert #RRGGBB hex color + opacity (0–1) to ASS &HAABBGGRR format.
+ * Convert #RRGGBB or #RGB hex color + opacity (0–1) to ASS &HAABBGGRR format.
  * ASS alpha: 0x00 = fully opaque, 0xFF = fully transparent.
  */
 function hexToAssColor(hex: string, opacity: number): string {
-  const clean = hex.replace(/^#/, "").padEnd(6, "0");
+  let digits = hex.replace(/^#/, "");
+  // Expand 3-digit shorthand: #RGB → #RRGGBB
+  if (digits.length === 3) {
+    digits = digits[0] + digits[0] + digits[1] + digits[1] + digits[2] + digits[2];
+  }
+  const clean = digits.padEnd(6, "0");
   const r = clean.substring(0, 2).toUpperCase();
   const g = clean.substring(2, 4).toUpperCase();
   const b = clean.substring(4, 6).toUpperCase();
@@ -29,6 +35,19 @@ function hexToAssColor(hex: string, opacity: number): string {
     .padStart(2, "0")
     .toUpperCase();
   return `&H${assAlpha}${b}${g}${r}`;
+}
+
+/**
+ * Escape ASS special characters in user-supplied text.
+ * In ASS, override tags must be inside {…} blocks — a bare \ outside braces
+ * is literal text, so only { and } need escaping. libass treats \{ and \} as
+ * literal braces. Newlines are converted to the ASS hard-newline sequence \N.
+ */
+function escapeAss(text: string): string {
+  return text
+    .replace(/\{/g, "\\{")
+    .replace(/\}/g, "\\}")
+    .replace(/\n/g, "\\N");
 }
 
 /** Return indices where each sentence group starts within a words array. */
@@ -105,7 +124,6 @@ export function captionDataToAss(
         g + 1 < groupStarts.length ? groupStarts[g + 1] : seg.words.length;
 
       const groupWords = seg.words.slice(startIdx, endIdx);
-      const groupStart = groupWords[0].start;
       // End at the next group's first word start, or the last word's end
       const groupEnd =
         g + 1 < groupStarts.length
@@ -128,9 +146,9 @@ export function captionDataToAss(
             const space = i === 0 ? "" : " ";
             if (i === wIdx) {
               // Active word: override to gold, then {\r} resets to style default (white)
-              return `${space}{\\c&H0000D7FF&}${w.word}{\\r}`;
+              return `${space}{\\c&H0000D7FF&}${escapeAss(w.word)}{\\r}`;
             }
-            return `${space}${w.word}`;
+            return `${space}${escapeAss(w.word)}`;
           })
           .join("");
 
@@ -166,10 +184,10 @@ export function captionDataToAss(
     );
     const fs = overlay.style.fontSize;
 
-    // \3c overrides OutlineColour per-dialogue (used with BorderStyle:1)
-    const tags = `{\\pos(${x},${y})\\an${an}\\c${textColor}\\3c${bgColor}\\fs${fs}}`;
+    // \4c overrides BackColour per-dialogue (used for box fill with BorderStyle:3)
+    const tags = `{\\pos(${x},${y})\\an${an}\\c${textColor}\\4c${bgColor}\\fs${fs}}`;
     lines.push(
-      `Dialogue: 0,${formatAssTime(overlay.start)},${formatAssTime(overlay.end)},Speech,,0,0,0,,${tags}${overlay.text}`
+      `Dialogue: 0,${formatAssTime(overlay.start)},${formatAssTime(overlay.end)},Speech,,0,0,0,,${tags}${escapeAss(overlay.text)}`
     );
   }
 

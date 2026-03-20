@@ -68,10 +68,18 @@ async function processVideo(videoId: string, rawUrl: string, language?: string):
   }
 }
 
+/** Extract the storage path within the "videos" bucket from a Supabase public URL. */
+function extractStoragePath(publicUrl: string): string | null {
+  const marker = "/storage/v1/object/public/videos/";
+  const idx = publicUrl.indexOf(marker);
+  return idx === -1 ? null : publicUrl.slice(idx + marker.length);
+}
+
 async function exportVideo(
   videoId: string,
   captionData: CaptionData,
-  rawUrl: string
+  rawUrl: string,
+  previousProcessedUrl?: string
 ): Promise<void> {
   const tmpDir = path.join("/tmp", `${videoId}-export`);
   try {
@@ -123,6 +131,20 @@ async function exportVideo(
       status: "completed",
       processedUrl: urlData.publicUrl,
     });
+
+    // Delete the previous export object now that the new one is live.
+    // Non-fatal: a cleanup failure should not roll back a successful export.
+    if (previousProcessedUrl) {
+      const oldPath = extractStoragePath(previousProcessedUrl);
+      if (oldPath) {
+        const { error: deleteError } = await supabase.storage
+          .from("videos")
+          .remove([oldPath]);
+        if (deleteError) {
+          console.warn(`[${videoId}] Failed to delete old export (${oldPath}):`, deleteError.message);
+        }
+      }
+    }
   } catch (error) {
     console.error(`Export failed for ${videoId}:`, error);
     await callApiCallback(videoId, { status: "failed" });
@@ -153,7 +175,7 @@ app.post("/process", (req, res) => {
 });
 
 app.post("/export", (req, res) => {
-  const { videoId, captionData, rawUrl, secret } = req.body;
+  const { videoId, captionData, rawUrl, previousProcessedUrl, secret } = req.body;
 
   if (secret !== WORKER_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
@@ -168,7 +190,7 @@ app.post("/export", (req, res) => {
   // Respond immediately, export in background
   res.json({ status: "accepted" });
 
-  exportVideo(videoId, captionData, rawUrl).catch((err) =>
+  exportVideo(videoId, captionData, rawUrl, previousProcessedUrl).catch((err) =>
     console.error(`exportVideo failed for ${videoId}:`, err)
   );
 });

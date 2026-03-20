@@ -250,12 +250,14 @@ function StatusSkeleton() {
   const pulse = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 0.7, duration: 800, useNativeDriver: true }),
         Animated.timing(pulse, { toValue: 0.4, duration: 800, useNativeDriver: true }),
       ]),
-    ).start();
+    );
+    animation.start();
+    return () => animation.stop();
   }, [pulse]);
 
   const videoHeight = Dimensions.get('window').height * 0.65;

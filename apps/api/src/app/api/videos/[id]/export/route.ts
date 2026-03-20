@@ -16,7 +16,7 @@ export async function POST(
 
   const video = await prisma.video.findFirst({
     where: { id, userId: user.id },
-    select: { status: true, captionData: true, rawUrl: true },
+    select: { status: true, captionData: true, rawUrl: true, processedUrl: true },
   });
 
   if (!video) {
@@ -30,7 +30,7 @@ export async function POST(
     );
   }
 
-  await callWorkerExport(id, video.captionData, video.rawUrl);
+  await callWorkerExport(id, video.captionData, video.rawUrl, video.processedUrl ?? undefined);
 
   return NextResponse.json({ status: "exporting" });
 }

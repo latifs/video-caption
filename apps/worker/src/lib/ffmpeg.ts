@@ -48,16 +48,16 @@ export function getVideoDimensions(
 
 export function burnSubtitles(
   inputPath: string,
-  srtPath: string,
+  subtitlesPath: string,
   outputPath: string,
   fontsDir?: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const escapedSrtPath = srtPath.replace(/'/g, "'\\''").replace(/:/g, "\\:");
+    const escapedSubtitlesPath = subtitlesPath.replace(/'/g, "'\\''").replace(/:/g, "\\:");
     const escapedFontsDir = fontsDir?.replace(/'/g, "'\\''").replace(/:/g, "\\:");
     const filterStr = escapedFontsDir
-      ? `subtitles='${escapedSrtPath}':fontsdir='${escapedFontsDir}'`
-      : `subtitles='${escapedSrtPath}'`;
+      ? `subtitles='${escapedSubtitlesPath}':fontsdir='${escapedFontsDir}'`
+      : `subtitles='${escapedSubtitlesPath}'`;
     ffmpeg(inputPath)
       .videoFilter(filterStr)
       .videoCodec("libx264")
