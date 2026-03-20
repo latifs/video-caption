@@ -1,3 +1,5 @@
+// Keep in sync with apps/worker/src/lib/caption-styles.ts.
+// Duplicated intentionally — the worker is self-contained (no packages/types dep) for Docker builds.
 export type CaptionStyleId = 'classic' | 'outline';
 
 export interface CaptionStyleDef {

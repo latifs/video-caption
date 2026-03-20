@@ -110,9 +110,11 @@ export function CaptionOverlay({
               style={{
                 color: style.textColor,
                 fontWeight: style.fontWeight,
-                textShadowColor: 'rgba(0,0,0,0.9)',
-                textShadowOffset: { width: 1, height: 1 },
-                textShadowRadius: 4,
+                ...(style.textShadow && {
+                  textShadowColor: 'rgba(0,0,0,0.9)',
+                  textShadowOffset: { width: 1, height: 1 },
+                  textShadowRadius: 4,
+                }),
               }}
             >
               {visibleWords.map((word, i) => (
@@ -122,9 +124,11 @@ export function CaptionOverlay({
                     i === activeWordIndex
                       ? {
                           color: style.activeWordColor,
-                          textShadowColor: 'rgba(0,0,0,0.9)',
-                          textShadowOffset: { width: 1, height: 1 },
-                          textShadowRadius: 4,
+                          ...(style.textShadow && {
+                            textShadowColor: 'rgba(0,0,0,0.9)',
+                            textShadowOffset: { width: 1, height: 1 },
+                            textShadowRadius: 4,
+                          }),
                         }
                       : undefined
                   }

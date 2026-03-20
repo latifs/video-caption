@@ -1,3 +1,5 @@
+// Keep in sync with apps/mobile/src/lib/caption-styles.ts.
+// Duplicated intentionally — the worker is self-contained (no packages/types dep) for Docker builds.
 export type CaptionStyleId = 'classic' | 'outline';
 
 export interface AssStyleConfig {
@@ -34,6 +36,13 @@ export const ASS_STYLES: Record<CaptionStyleId, AssStyleConfig> = {
   },
 };
 
+function isCaptionStyleId(id: string): id is CaptionStyleId {
+  return id === 'classic' || id === 'outline';
+}
+
 export function getAssStyle(id: string): AssStyleConfig {
-  return ASS_STYLES[id as CaptionStyleId] ?? ASS_STYLES.classic;
+  if (isCaptionStyleId(id)) {
+    return ASS_STYLES[id];
+  }
+  return ASS_STYLES.classic;
 }
