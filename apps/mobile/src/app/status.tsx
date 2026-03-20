@@ -29,6 +29,7 @@ import { CaptionOverlay } from '@/components/CaptionOverlay';
 import { CaptionEditor } from '@/components/CaptionEditor';
 import { VideoControls } from '@/components/VideoControls';
 import { normalizeCaptionTimings } from '@/lib/caption-utils';
+import { CAPTION_STYLES, type CaptionStyleId, getCaptionStyle } from '@/lib/caption-styles';
 import type { CaptionData } from 'types';
 
 const LANGUAGES = [
@@ -59,13 +60,14 @@ const CaptionedVideo = forwardRef<
   {
     url: string;
     captionData?: CaptionData | null;
+    captionStyle?: CaptionStyleId;
     onTimeUpdate?: (time: number) => void;
     onPlayingChange?: (isPlaying: boolean) => void;
     onDurationChange?: (duration: number) => void;
     onBack?: () => void;
   }
 >(function CaptionedVideo(
-  { url, captionData, onTimeUpdate, onPlayingChange, onDurationChange, onBack },
+  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack },
   ref,
 ) {
   const player = useVideoPlayer(url, (p) => {
@@ -183,7 +185,11 @@ const CaptionedVideo = forwardRef<
       </Pressable>
 
       {captionData && (
-        <CaptionOverlay currentTime={currentTime} captionData={captionData} />
+        <CaptionOverlay
+          currentTime={currentTime}
+          captionData={captionData}
+          captionStyle={captionStyle ? getCaptionStyle(captionStyle) : undefined}
+        />
       )}
 
       {/* Back button at top-left */}
@@ -293,6 +299,7 @@ export default function StatusScreen() {
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [startingTranscription, setStartingTranscription] = useState(false);
+  const [selectedStyle, setSelectedStyle] = useState<CaptionStyleId>('classic');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<CaptionedVideoHandle>(null);
 
@@ -388,7 +395,7 @@ export default function StatusScreen() {
     setShowExported(false);
     setExporting(true);
     try {
-      await triggerExport(videoId, session.access_token);
+      await triggerExport(videoId, session.access_token, selectedStyle);
       setStatus('exporting');
 
       // Resume polling for export completion
@@ -574,6 +581,7 @@ export default function StatusScreen() {
           ref={videoRef}
           url={showExported && processedUrl ? processedUrl : rawUrl}
           captionData={showExported ? null : captionData}
+          captionStyle={selectedStyle}
           onTimeUpdate={handleTimeUpdate}
           onDurationChange={handleDurationChange}
           onBack={() => router.back()}
@@ -600,6 +608,35 @@ export default function StatusScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {/* Style picker */}
+      {!showExported && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 8 }}
+        >
+          {CAPTION_STYLES.map((s) => (
+            <TouchableOpacity
+              key={s.id}
+              onPress={() => setSelectedStyle(s.id)}
+              className={`rounded-xl px-5 py-2.5 ${
+                selectedStyle === s.id
+                  ? 'bg-primary'
+                  : 'border border-border bg-secondary'
+              }`}
+            >
+              <Text
+                className={`text-sm font-medium ${
+                  selectedStyle === s.id ? 'text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {s.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       )}
 
       {/* Caption editor fills remaining space */}

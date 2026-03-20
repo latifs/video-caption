@@ -5,6 +5,7 @@ import {
   findActiveWordIndex,
   findActiveOverlays,
 } from '@/lib/caption-utils';
+import { type CaptionStyleDef, getCaptionStyle } from '@/lib/caption-styles';
 
 /** Minimum gap (seconds) between words to treat as a sentence boundary. */
 const SENTENCE_GAP_S = 0.3;
@@ -56,12 +57,15 @@ function getVisibleWords(
 interface CaptionOverlayProps {
   currentTime: number;
   captionData: CaptionData;
+  captionStyle?: CaptionStyleDef;
 }
 
 export function CaptionOverlay({
   currentTime,
   captionData,
+  captionStyle,
 }: CaptionOverlayProps) {
+  const style = captionStyle ?? getCaptionStyle('classic');
   const activeSegment = findActiveSegment(
     captionData.speechTrack.segments,
     currentTime,
@@ -83,19 +87,54 @@ export function CaptionOverlay({
       {/* Speech captions */}
       {activeSegment && visibleWords.length > 0 && (
         <View className="absolute bottom-[10%] left-4 right-4 items-center">
-          <View className="rounded bg-overlay px-3 py-1.5">
-            <Text className="text-center text-base text-white">
+          {style.showBackground ? (
+            <View
+              className="rounded px-3 py-1.5"
+              style={{ backgroundColor: style.backgroundColor }}
+            >
+              <Text className="text-center text-base" style={{ color: style.textColor, fontWeight: style.fontWeight }}>
+                {visibleWords.map((word, i) => (
+                  <Text
+                    key={`${word.start}-${i}`}
+                    style={i === activeWordIndex ? { color: style.activeWordColor } : undefined}
+                  >
+                    {i > 0 ? ' ' : ''}
+                    {word.word}
+                  </Text>
+                ))}
+              </Text>
+            </View>
+          ) : (
+            <Text
+              className="text-center text-base"
+              style={{
+                color: style.textColor,
+                fontWeight: style.fontWeight,
+                textShadowColor: 'rgba(0,0,0,0.9)',
+                textShadowOffset: { width: 1, height: 1 },
+                textShadowRadius: 4,
+              }}
+            >
               {visibleWords.map((word, i) => (
                 <Text
                   key={`${word.start}-${i}`}
-                  style={i === activeWordIndex ? { color: '#FFD700' } : undefined}
+                  style={
+                    i === activeWordIndex
+                      ? {
+                          color: style.activeWordColor,
+                          textShadowColor: 'rgba(0,0,0,0.9)',
+                          textShadowOffset: { width: 1, height: 1 },
+                          textShadowRadius: 4,
+                        }
+                      : undefined
+                  }
                 >
                   {i > 0 ? ' ' : ''}
                   {word.word}
                 </Text>
               ))}
             </Text>
-          </View>
+          )}
         </View>
       )}
 

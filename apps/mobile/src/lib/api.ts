@@ -126,11 +126,12 @@ export async function retryVideo(
 
 export async function triggerExport(
   videoId: string,
-  accessToken: string
+  accessToken: string,
+  captionStyle?: string
 ): Promise<void> {
   await axios.post(
     `${API_URL}/api/videos/${videoId}/export`,
-    {},
+    { captionStyle },
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 }
