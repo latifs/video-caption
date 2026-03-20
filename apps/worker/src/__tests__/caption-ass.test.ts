@@ -86,9 +86,8 @@ describe("captionDataToAss — speech dialogue timing and highlighting", () => {
     expect(ass).toContain("1:01:01.50");
   });
 
-  it("wraps active word in gold colour override and resets after", () => {
+  it("wraps active word in gold colour override and resets after (classic)", () => {
     const ass = captionDataToAss(makeCaptionData());
-    // Gold override tag for active word
     expect(ass).toContain("{\\c&H0000D7FF&}Hello{\\r}");
   });
 
@@ -267,5 +266,35 @@ describe("captionDataToAss — overlay positioning and colour formatting", () =>
     });
     const ass = captionDataToAss(data);
     expect(ass).toContain("\\fs36");
+  });
+});
+
+describe("captionDataToAss — styleId parameter", () => {
+  it("classic style: BorderStyle 3, bold 0, gold active word", () => {
+    const ass = captionDataToAss(makeCaptionData(), 1280, 720, "classic");
+    expect(ass).toMatch(/Style: Speech,Arial,\d+,&H00FFFFFF,&H00FFFFFF,&H00000000,&H40000000,0,/);
+    // BorderStyle:3 at position 16
+    expect(ass).toContain(",3,2,0,2,");
+    expect(ass).toContain("{\\c&H0000D7FF&}Hello{\\r}");
+  });
+
+  it("outline style: BorderStyle 1, bold 1, cyan active word", () => {
+    const ass = captionDataToAss(makeCaptionData(), 1280, 720, "outline");
+    expect(ass).toMatch(/Style: Speech,Arial,\d+,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,/);
+    // BorderStyle:1 at position 16
+    expect(ass).toContain(",1,3,1,2,");
+    expect(ass).toContain("{\\c&H00FFE500&}Hello{\\r}");
+  });
+
+  it("unknown styleId falls back to classic", () => {
+    const ass = captionDataToAss(makeCaptionData(), 1280, 720, "nonexistent");
+    expect(ass).toContain("{\\c&H0000D7FF&}Hello{\\r}");
+    expect(ass).toContain(",3,2,0,2,");
+  });
+
+  it("default (no styleId) behaves identically to classic", () => {
+    const withDefault = captionDataToAss(makeCaptionData());
+    const withClassic = captionDataToAss(makeCaptionData(), 1280, 720, "classic");
+    expect(withDefault).toBe(withClassic);
   });
 });

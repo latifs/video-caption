@@ -1,4 +1,5 @@
 import type { CaptionData, SpeechWord } from "../types/caption";
+import { getAssStyle } from "./caption-styles";
 
 /** Minimum gap (seconds) between words to treat as a sentence boundary. */
 const SENTENCE_GAP_S = 0.3;
@@ -67,8 +68,10 @@ function getGroupBoundaries(words: SpeechWord[]): number[] {
 export function captionDataToAss(
   data: CaptionData,
   videoWidth = 1280,
-  videoHeight = 720
+  videoHeight = 720,
+  styleId = 'classic'
 ): string {
+  const cfg = getAssStyle(styleId);
   const lines: string[] = [];
 
   // Scale font to the SHORT edge so portrait videos (tall height) don't
@@ -97,12 +100,8 @@ export function captionDataToAss(
   lines.push(
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding"
   );
-  // BorderStyle:3 = opaque box; Outline:2 = box border (required by some libass
-  // builds for the box to render); BackColour &H40000000 = ~75% opaque black;
-  // PrimaryColour = white (default text); Alignment:2 = bottom-center.
-  // Active word is highlighted gold via inline {\c} override in each dialogue event.
   lines.push(
-    `Style: Speech,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H40000000,0,0,0,0,100,100,0,0,3,2,0,2,${marginLR},${marginLR},${marginV},1`
+    `Style: Speech,Arial,${fontSize},${cfg.primaryColour},${cfg.primaryColour},${cfg.outlineColour},${cfg.backColour},${cfg.bold},0,0,0,100,100,0,0,${cfg.borderStyle},${cfg.outline},${cfg.shadow},2,${marginLR},${marginLR},${marginV},1`
   );
   lines.push("");
 
@@ -145,8 +144,8 @@ export function captionDataToAss(
           .map((w, i) => {
             const space = i === 0 ? "" : " ";
             if (i === wIdx) {
-              // Active word: override to gold, then {\r} resets to style default (white)
-              return `${space}{\\c&H0000D7FF&}${escapeAss(w.word)}{\\r}`;
+              // Active word: override colour, then {\r} resets to style default
+              return `${space}{\\c${cfg.activeWordColour}&}${escapeAss(w.word)}{\\r}`;
             }
             return `${space}${escapeAss(w.word)}`;
           })

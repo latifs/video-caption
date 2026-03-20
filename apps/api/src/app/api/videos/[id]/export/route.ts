@@ -13,6 +13,8 @@ export async function POST(
   }
 
   const { id } = await params;
+  const body = await request.json().catch(() => ({}));
+  const captionStyle: string | undefined = body.captionStyle;
 
   const video = await prisma.video.findFirst({
     where: { id, userId: user.id },
@@ -30,7 +32,7 @@ export async function POST(
     );
   }
 
-  await callWorkerExport(id, video.captionData, video.rawUrl, video.processedUrl ?? undefined);
+  await callWorkerExport(id, video.captionData, video.rawUrl, video.processedUrl ?? undefined, captionStyle);
 
   return NextResponse.json({ status: "exporting" });
 }

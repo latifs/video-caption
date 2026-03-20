@@ -79,7 +79,8 @@ async function exportVideo(
   videoId: string,
   captionData: CaptionData,
   rawUrl: string,
-  previousProcessedUrl?: string
+  previousProcessedUrl?: string,
+  captionStyle?: string
 ): Promise<void> {
   const tmpDir = path.join("/tmp", `${videoId}-export`);
   try {
@@ -104,7 +105,7 @@ async function exportVideo(
     const { width: videoWidth, height: videoHeight } = await getVideoDimensions(inputPath);
 
     // Convert caption data to ASS (styled subtitles matching UI overlay)
-    const assContent = captionDataToAss(captionData, videoWidth, videoHeight);
+    const assContent = captionDataToAss(captionData, videoWidth, videoHeight, captionStyle);
     fs.writeFileSync(assPath, assContent);
 
     // Burn subtitles (pass fontsdir so libass can find Arial / Liberation Sans)
@@ -175,7 +176,7 @@ app.post("/process", (req, res) => {
 });
 
 app.post("/export", (req, res) => {
-  const { videoId, captionData, rawUrl, previousProcessedUrl, secret } = req.body;
+  const { videoId, captionData, rawUrl, previousProcessedUrl, captionStyle, secret } = req.body;
 
   if (secret !== WORKER_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
@@ -190,7 +191,7 @@ app.post("/export", (req, res) => {
   // Respond immediately, export in background
   res.json({ status: "accepted" });
 
-  exportVideo(videoId, captionData, rawUrl, previousProcessedUrl).catch((err) =>
+  exportVideo(videoId, captionData, rawUrl, previousProcessedUrl, captionStyle).catch((err) =>
     console.error(`exportVideo failed for ${videoId}:`, err)
   );
 });
