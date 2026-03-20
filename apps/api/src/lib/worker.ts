@@ -16,12 +16,14 @@ export async function callWorker(
 export async function callWorkerExport(
   videoId: string,
   captionData: unknown,
-  rawUrl: string
+  rawUrl: string,
+  previousProcessedUrl?: string
 ): Promise<void> {
   await axios.post(`${process.env.WORKER_URL!}/export`, {
     videoId,
     captionData,
     rawUrl,
+    previousProcessedUrl,
     secret: process.env.WORKER_SECRET!,
   });
 }

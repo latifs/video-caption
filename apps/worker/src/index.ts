@@ -5,19 +5,30 @@ import fs from "fs";
 import path from "path";
 import { supabase } from "./lib/supabase";
 import { callApiCallback } from "./lib/api";
-import { extractAudio, burnSubtitles } from "./lib/ffmpeg";
+import { extractAudio, burnSubtitles, getVideoDimensions } from "./lib/ffmpeg";
 import {
   buildCaptionDataFromWhisperX,
   getWhisperXDuration,
 } from "./lib/caption-data";
 import { alignWithWhisperX } from "./lib/whisperx";
-import { captionDataToSrt } from "./lib/caption-srt";
+import { captionDataToAss } from "./lib/caption-ass";
 import type { CaptionData } from "./types/caption";
 
 const app = express();
 app.use(express.json({ limit: "5mb" }));
 
 const WORKER_SECRET = process.env.WORKER_SECRET!;
+
+/**
+ * Resolve a directory containing font files for libass.
+ * Checked in order: FONTS_DIR env var, platform defaults.
+ */
+function getFontsDir(): string | undefined {
+  if (process.env.FONTS_DIR) return process.env.FONTS_DIR;
+  if (process.platform === "darwin") return "/Library/Fonts";
+  // Linux (Docker with fonts-liberation installed)
+  return "/usr/share/fonts";
+}
 
 async function processVideo(videoId: string, rawUrl: string, language?: string): Promise<void> {
   const tmpDir = path.join("/tmp", videoId);
@@ -57,10 +68,18 @@ async function processVideo(videoId: string, rawUrl: string, language?: string):
   }
 }
 
+/** Extract the storage path within the "videos" bucket from a Supabase public URL. */
+function extractStoragePath(publicUrl: string): string | null {
+  const marker = "/storage/v1/object/public/videos/";
+  const idx = publicUrl.indexOf(marker);
+  return idx === -1 ? null : publicUrl.slice(idx + marker.length);
+}
+
 async function exportVideo(
   videoId: string,
   captionData: CaptionData,
-  rawUrl: string
+  rawUrl: string,
+  previousProcessedUrl?: string
 ): Promise<void> {
   const tmpDir = path.join("/tmp", `${videoId}-export`);
   try {
@@ -72,7 +91,7 @@ async function exportVideo(
     await callApiCallback(videoId, { status: "exporting" });
 
     const inputPath = path.join(tmpDir, "input.mp4");
-    const srtPath = path.join(tmpDir, "subtitles.srt");
+    const assPath = path.join(tmpDir, "subtitles.ass");
     const outputPath = path.join(tmpDir, "output.mp4");
 
     // Download raw video
@@ -81,22 +100,25 @@ async function exportVideo(
     });
     fs.writeFileSync(inputPath, Buffer.from(response.data));
 
-    // Convert caption data to SRT
-    const srtContent = captionDataToSrt(captionData);
-    fs.writeFileSync(srtPath, srtContent);
+    // Probe actual video dimensions so ASS scales correctly at any resolution
+    const { width: videoWidth, height: videoHeight } = await getVideoDimensions(inputPath);
 
-    // Burn subtitles
-    await burnSubtitles(inputPath, srtPath, outputPath);
+    // Convert caption data to ASS (styled subtitles matching UI overlay)
+    const assContent = captionDataToAss(captionData, videoWidth, videoHeight);
+    fs.writeFileSync(assPath, assContent);
 
-    // Upload processed video
+    // Burn subtitles (pass fontsdir so libass can find Arial / Liberation Sans)
+    await burnSubtitles(inputPath, assPath, outputPath, getFontsDir());
+
+    // Upload processed video — include a timestamp in the filename so each
+    // re-export is a distinct storage object, bypassing CDN cache entirely.
     const processedFile = fs.readFileSync(outputPath);
-    const storagePath = `processed/${videoId}.mp4`;
+    const storagePath = `processed/${videoId}_${Date.now()}.mp4`;
 
     const { error: uploadError } = await supabase.storage
       .from("videos")
       .upload(storagePath, processedFile, {
         contentType: "video/mp4",
-        upsert: true,
       });
 
     if (uploadError) throw uploadError;
@@ -109,6 +131,20 @@ async function exportVideo(
       status: "completed",
       processedUrl: urlData.publicUrl,
     });
+
+    // Delete the previous export object now that the new one is live.
+    // Non-fatal: a cleanup failure should not roll back a successful export.
+    if (previousProcessedUrl) {
+      const oldPath = extractStoragePath(previousProcessedUrl);
+      if (oldPath) {
+        const { error: deleteError } = await supabase.storage
+          .from("videos")
+          .remove([oldPath]);
+        if (deleteError) {
+          console.warn(`[${videoId}] Failed to delete old export (${oldPath}):`, deleteError.message);
+        }
+      }
+    }
   } catch (error) {
     console.error(`Export failed for ${videoId}:`, error);
     await callApiCallback(videoId, { status: "failed" });
@@ -139,7 +175,7 @@ app.post("/process", (req, res) => {
 });
 
 app.post("/export", (req, res) => {
-  const { videoId, captionData, rawUrl, secret } = req.body;
+  const { videoId, captionData, rawUrl, previousProcessedUrl, secret } = req.body;
 
   if (secret !== WORKER_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
@@ -154,7 +190,7 @@ app.post("/export", (req, res) => {
   // Respond immediately, export in background
   res.json({ status: "accepted" });
 
-  exportVideo(videoId, captionData, rawUrl).catch((err) =>
+  exportVideo(videoId, captionData, rawUrl, previousProcessedUrl).catch((err) =>
     console.error(`exportVideo failed for ${videoId}:`, err)
   );
 });

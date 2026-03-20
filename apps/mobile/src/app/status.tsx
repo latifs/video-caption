@@ -17,6 +17,7 @@ import {
   StatusBar,
   Dimensions,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -245,15 +246,49 @@ const CaptionedVideo = forwardRef<
   );
 });
 
+function StatusSkeleton() {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+
+  const videoHeight = Dimensions.get('window').height * 0.65;
+
+  return (
+    <View className="flex-1 bg-background">
+      <Animated.View
+        style={{ height: videoHeight, opacity: pulse }}
+        className="w-full bg-secondary"
+      />
+      <View className="px-5 pt-6 gap-3">
+        <Animated.View style={{ opacity: pulse }} className="h-4 w-32 rounded-md bg-secondary" />
+        <Animated.View style={{ opacity: pulse }} className="h-3 w-56 rounded-md bg-secondary" />
+        <Animated.View style={{ opacity: pulse }} className="mt-2 h-12 rounded-xl bg-secondary" />
+      </View>
+    </View>
+  );
+}
+
 export default function StatusScreen() {
   const { videoId } = useLocalSearchParams<{ videoId: string }>();
   const { session } = useAuth();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('uploaded');
   const [rawUrl, setRawUrl] = useState<string | null>(null);
   const [captionData, setCaptionData] = useState<CaptionData | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
+  const [processedUrl, setProcessedUrl] = useState<string | null>(null);
+  const [showExported, setShowExported] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
@@ -269,6 +304,7 @@ export default function StatusScreen() {
         const data = await getVideoStatus(videoId, session.access_token);
         setStatus(data.status);
         if (data.rawUrl) setRawUrl(data.rawUrl);
+        if (data.processedUrl) setProcessedUrl(data.processedUrl);
 
         if (data.captionData)
           setCaptionData(normalizeCaptionTimings(data.captionData));
@@ -284,6 +320,8 @@ export default function StatusScreen() {
         }
       } catch (error) {
         console.error('Failed to poll status:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -347,6 +385,7 @@ export default function StatusScreen() {
 
   const handleExport = async () => {
     if (!videoId || !session) return;
+    setShowExported(false);
     setExporting(true);
     try {
       await triggerExport(videoId, session.access_token);
@@ -358,6 +397,7 @@ export default function StatusScreen() {
         try {
           const data = await getVideoStatus(videoId, session.access_token);
           setStatus(data.status);
+          if (data.processedUrl) setProcessedUrl(data.processedUrl);
 
           if (data.status === 'completed' || data.status === 'failed') {
             if (intervalRef.current) clearInterval(intervalRef.current);
@@ -376,6 +416,10 @@ export default function StatusScreen() {
   const selectedLangLabel =
     LANGUAGES.find((l) => l.code === selectedLanguage)?.label ??
     selectedLanguage;
+
+  if (loading) {
+    return <StatusSkeleton />;
+  }
 
   if (status === 'uploaded') {
     return (
@@ -528,16 +572,38 @@ export default function StatusScreen() {
       {rawUrl && (
         <CaptionedVideo
           ref={videoRef}
-          url={rawUrl}
-          captionData={captionData}
+          url={showExported && processedUrl ? processedUrl : rawUrl}
+          captionData={showExported ? null : captionData}
           onTimeUpdate={handleTimeUpdate}
           onDurationChange={handleDurationChange}
           onBack={() => router.back()}
         />
       )}
 
+      {/* Toggle pill — only when export is available */}
+      {status === 'completed' && processedUrl && (
+        <View className="flex-row mx-5 mt-3 mb-1 rounded-xl bg-secondary p-1">
+          <TouchableOpacity
+            className={`flex-1 items-center rounded-lg py-2 ${!showExported ? 'bg-background' : ''}`}
+            onPress={() => setShowExported(false)}
+          >
+            <Text className={`text-sm font-medium ${!showExported ? 'text-foreground' : 'text-muted-foreground'}`}>
+              Preview
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className={`flex-1 items-center rounded-lg py-2 ${showExported ? 'bg-background' : ''}`}
+            onPress={() => setShowExported(true)}
+          >
+            <Text className={`text-sm font-medium ${showExported ? 'text-foreground' : 'text-muted-foreground'}`}>
+              Exported
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Caption editor fills remaining space */}
-      {captionData && session && (
+      {!showExported && captionData && session && (
         <CaptionEditor
           captionData={captionData}
           currentTime={currentTime}
