@@ -2,49 +2,45 @@ const { hairlineWidth } = require("nativewind/theme");
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: "class",
+  darkMode: "media",
   content: ["./src/app/**/*.{ts,tsx}", "./src/components/**/*.{ts,tsx}"],
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
       colors: {
-        border: "rgba(255,255,255,0.1)",
-        input: "rgba(255,255,255,0.1)",
-        background: "#0F0F1A",
-        foreground: "#ffffff",
+        border: "var(--color-border)",
+        input: "var(--color-input)",
+        background: "var(--color-background)",
+        foreground: "var(--color-foreground)",
         primary: {
-          DEFAULT: "#8B5CF6",
-          foreground: "#ffffff",
-          muted: "rgba(139,92,246,0.15)",
+          DEFAULT: "var(--color-primary)",
+          foreground: "var(--color-primary-foreground)",
+          muted: "var(--color-primary-muted)",
         },
         secondary: {
-          DEFAULT: "rgba(255,255,255,0.08)",
-          foreground: "#ffffff",
+          DEFAULT: "var(--color-secondary)",
+          foreground: "var(--color-secondary-foreground)",
         },
         destructive: {
-          DEFAULT: "#FF3B30",
-          foreground: "#ffffff",
+          DEFAULT: "var(--color-destructive)",
+          foreground: "var(--color-primary-foreground)",
         },
         muted: {
-          DEFAULT: "#1A1A2E",
-          foreground: "rgba(255,255,255,0.5)",
+          DEFAULT: "var(--color-muted)",
+          foreground: "var(--color-muted-foreground)",
         },
         accent: {
-          DEFAULT: "#A78BFA",
-          foreground: "#ffffff",
+          DEFAULT: "var(--color-accent)",
+          foreground: "var(--color-accent-foreground)",
         },
         card: {
-          DEFAULT: "#1C1C2E",
-          foreground: "#ffffff",
-        },
-        popover: {
-          DEFAULT: "#1E1E1E",
-          foreground: "#ffffff",
+          DEFAULT: "var(--color-card)",
+          foreground: "var(--color-card-foreground)",
         },
         success: {
-          DEFAULT: "#34C759",
+          DEFAULT: "var(--color-success)",
         },
-        overlay: "rgba(0,0,0,0.5)",
+        overlay: "var(--color-overlay)",
       },
       borderWidth: {
         hairline: hairlineWidth(),

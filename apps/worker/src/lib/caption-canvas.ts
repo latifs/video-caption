@@ -1,0 +1,296 @@
+import { createCanvas, type CanvasRenderingContext2D } from "@napi-rs/canvas";
+import * as fs from "fs";
+import * as path from "path";
+import type { CaptionData, SpeechWord } from "../types/caption";
+
+/** Minimum gap (seconds) between words to treat as a sentence boundary. */
+const SENTENCE_GAP_S = 0.3;
+/** Cap word duration — WhisperX inflates segment-final words to absorb silence. */
+const MAX_WORD_DURATION_S = 0.8;
+
+interface CanvasStyleConfig {
+  textColor: string;
+  activeWordColor: string;
+  showBackground: boolean;
+  backgroundColor: string;
+  fontWeight: "normal" | "bold";
+  textShadow: boolean;
+}
+
+const CANVAS_STYLES: Record<string, CanvasStyleConfig> = {
+  classic: {
+    textColor: "#ffffff",
+    activeWordColor: "#FFD700",
+    showBackground: true,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    fontWeight: "normal",
+    textShadow: false,
+  },
+  outline: {
+    textColor: "#ffffff",
+    activeWordColor: "#00E5FF",
+    showBackground: false,
+    backgroundColor: "transparent",
+    fontWeight: "bold",
+    textShadow: true,
+  },
+};
+
+export interface FrameEntry {
+  path: string;
+  duration: number;
+}
+
+/** Return indices where each sentence group starts within a words array. */
+function getGroupBoundaries(words: SpeechWord[]): number[] {
+  const groupStarts = [0];
+  for (let i = 1; i < words.length; i++) {
+    const prev = words[i - 1];
+    const cappedEnd =
+      prev.start + Math.min(prev.end - prev.start, MAX_WORD_DURATION_S);
+    if (words[i].start - cappedEnd > SENTENCE_GAP_S) {
+      groupStarts.push(i);
+    }
+  }
+  return groupStarts;
+}
+
+function computeLayout(videoWidth: number, videoHeight: number) {
+  const shortEdge = Math.min(videoWidth, videoHeight);
+  const fontSize = Math.round((shortEdge * 33) / 720);
+  const lineHeight = Math.round(fontSize * 1.25);
+  const paddingH = Math.round(fontSize * 0.75); // matches px-3 / text-base ratio
+  const paddingV = Math.round(fontSize * 0.375); // matches py-1.5 / text-base ratio
+  const borderRadius = Math.round(fontSize * 0.25); // matches Tailwind "rounded"
+  const maxTextWidth = videoWidth * 0.85; // matches left-4 right-4 constraint
+  const bottomY = videoHeight * 0.9; // bottom of caption box at 90% height
+  return { fontSize, lineHeight, paddingH, paddingV, borderRadius, maxTextWidth, bottomY };
+}
+
+/** Greedy word wrap — returns array of lines, each line is an array of words. */
+function wrapWords(
+  ctx: CanvasRenderingContext2D,
+  words: string[],
+  maxWidth: number
+): string[][] {
+  const lines: string[][] = [];
+  let current: string[] = [];
+  for (const word of words) {
+    const test =
+      current.length === 0 ? word : current.join(" ") + " " + word;
+    if (ctx.measureText(test).width > maxWidth && current.length > 0) {
+      lines.push(current);
+      current = [word];
+    } else {
+      current.push(word);
+    }
+  }
+  if (current.length > 0) lines.push(current);
+  return lines;
+}
+
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+function renderEmptyFrame(
+  outputPath: string,
+  videoWidth: number,
+  videoHeight: number
+): void {
+  // createCanvas produces a transparent canvas by default
+  const canvas = createCanvas(videoWidth, videoHeight);
+  fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
+}
+
+function renderCaptionFrame(
+  outputPath: string,
+  videoWidth: number,
+  videoHeight: number,
+  groupWords: SpeechWord[],
+  activeWordIdx: number,
+  style: CanvasStyleConfig
+): void {
+  const { fontSize, lineHeight, paddingH, paddingV, borderRadius, maxTextWidth, bottomY } =
+    computeLayout(videoWidth, videoHeight);
+
+  const canvas = createCanvas(videoWidth, videoHeight);
+  const ctx = canvas.getContext("2d");
+
+  ctx.font = `${style.fontWeight} ${fontSize}px Arial`;
+  // Use 'middle' baseline so glyphs are centered in their slot regardless of
+  // font-internal leading (Skia's 'top' includes leading that shifts glyphs down).
+  ctx.textBaseline = "middle";
+
+  const wordTexts = groupWords.map((w) => w.word);
+  const lines = wrapWords(ctx, wordTexts, maxTextWidth);
+
+  // Compute max line width to size the background box
+  let maxLineWidth = 0;
+  for (const line of lines) {
+    const w = ctx.measureText(line.join(" ")).width;
+    if (w > maxLineWidth) maxLineWidth = w;
+  }
+
+  const boxWidth = maxLineWidth + paddingH * 2;
+  const boxHeight = lines.length * lineHeight + paddingV * 2;
+  const boxX = (videoWidth - boxWidth) / 2;
+  const boxY = bottomY - boxHeight;
+
+  // Background box (classic style only)
+  if (style.showBackground) {
+    ctx.fillStyle = style.backgroundColor;
+    drawRoundedRect(ctx, boxX, boxY, boxWidth, boxHeight, borderRadius);
+    ctx.fill();
+  }
+
+  // Draw words line by line, per-word coloring.
+  // wordY = center of each line slot within the padded text area → text
+  // is vertically centered in the box (verified: box center == text block center).
+  let globalWordIdx = 0;
+
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
+    const lineWidth = ctx.measureText(line.join(" ")).width;
+    // Center each line in the video (= center in the box since box is centered)
+    let wordX = (videoWidth - lineWidth) / 2;
+    const wordY = boxY + paddingV + lineIdx * lineHeight + lineHeight / 2;
+
+    for (let wi = 0; wi < line.length; wi++) {
+      const word = line[wi];
+      const spaceWidth = wi > 0 ? ctx.measureText(" ").width : 0;
+      const wordWidth = ctx.measureText(word).width;
+      const drawX = wordX + spaceWidth;
+
+      if (style.textShadow) {
+        ctx.strokeStyle = "rgba(0,0,0,0.9)";
+        ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.12));
+        ctx.lineJoin = "round";
+        ctx.strokeText(word, drawX, wordY);
+      }
+
+      ctx.fillStyle =
+        globalWordIdx === activeWordIdx
+          ? style.activeWordColor
+          : style.textColor;
+      ctx.fillText(word, drawX, wordY);
+
+      wordX += spaceWidth + wordWidth;
+      globalWordIdx++;
+    }
+  }
+
+  fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
+}
+
+function writeConcatList(concatListPath: string, frames: FrameEntry[]): void {
+  const escape = (p: string) => p.replace(/'/g, "'\\''");
+  const lines = ["ffconcat version 1.0"];
+  for (const f of frames) {
+    lines.push(`file '${escape(f.path)}'`);
+    lines.push(`duration ${f.duration.toFixed(6)}`);
+  }
+  // Duplicate last entry without duration (ffconcat quirk: ensures final frame renders)
+  if (frames.length > 0) {
+    lines.push(`file '${escape(frames[frames.length - 1].path)}'`);
+  }
+  fs.writeFileSync(concatListPath, lines.join("\n"));
+}
+
+/**
+ * Generate transparent PNG caption frames for every word event and write an
+ * ffconcat list file. The caller passes this list to burnCaptionFrames().
+ */
+export function generateCaptionFrames(
+  tmpDir: string,
+  captionData: CaptionData,
+  videoWidth: number,
+  videoHeight: number,
+  styleId: string
+): { concatListPath: string; frameEntries: FrameEntry[] } {
+  const style = CANVAS_STYLES[styleId] ?? CANVAS_STYLES.classic;
+  const frames: FrameEntry[] = [];
+
+  const emptyPath = path.join(tmpDir, "caption_empty.png");
+  renderEmptyFrame(emptyPath, videoWidth, videoHeight);
+
+  let timelinePos = 0;
+  let frameCount = 0;
+
+  for (const seg of captionData.speechTrack.segments) {
+    if (seg.words.length === 0) continue;
+
+    const groupStarts = getGroupBoundaries(seg.words);
+
+    for (let g = 0; g < groupStarts.length; g++) {
+      const startIdx = groupStarts[g];
+      const endIdx =
+        g + 1 < groupStarts.length ? groupStarts[g + 1] : seg.words.length;
+
+      const groupWords = seg.words.slice(startIdx, endIdx);
+      const groupStart = groupWords[0].start;
+      const groupEnd =
+        g + 1 < groupStarts.length
+          ? seg.words[groupStarts[g + 1]].start
+          : seg.words[seg.words.length - 1].end;
+
+      // Silence gap before this group
+      if (groupStart > timelinePos + 0.001) {
+        frames.push({ path: emptyPath, duration: groupStart - timelinePos });
+      }
+
+      // One frame per word event (active word advances across the group)
+      for (let wIdx = 0; wIdx < groupWords.length; wIdx++) {
+        const eventEnd =
+          wIdx + 1 < groupWords.length
+            ? groupWords[wIdx + 1].start
+            : groupEnd;
+
+        const duration = eventEnd - groupWords[wIdx].start;
+        if (duration <= 0) continue;
+
+        const framePath = path.join(
+          tmpDir,
+          `caption_frame_${frameCount++}.png`
+        );
+        renderCaptionFrame(
+          framePath,
+          videoWidth,
+          videoHeight,
+          groupWords,
+          wIdx,
+          style
+        );
+        frames.push({ path: framePath, duration });
+        timelinePos = eventEnd;
+      }
+    }
+  }
+
+  // Guarantee at least one entry so the concat list is valid
+  if (frames.length === 0) {
+    frames.push({ path: emptyPath, duration: 9999 });
+  }
+
+  const concatListPath = path.join(tmpDir, "caption_concat.txt");
+  writeConcatList(concatListPath, frames);
+
+  return { concatListPath, frameEntries: frames };
+}

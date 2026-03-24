@@ -81,7 +81,7 @@ export function AddVideoSheet({
             className="mb-2.5 items-center rounded-xl bg-primary py-4"
             onPress={() => animateOut(onPhotosPress)}
           >
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-base font-semibold text-primary-foreground">
               Import from Photos
             </Text>
           </TouchableOpacity>

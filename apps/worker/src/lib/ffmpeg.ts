@@ -39,32 +39,39 @@ export function getVideoDimensions(
       if (match) {
         resolve({ width: parseInt(match[1], 10), height: parseInt(match[2], 10) });
       } else {
-        // Fallback — ASS coordinate system defaults will still work
+        // Fallback — canvas scaling defaults will still work
         resolve({ width: 1280, height: 720 });
       }
     });
   });
 }
 
-export function burnSubtitles(
-  inputPath: string,
-  subtitlesPath: string,
-  outputPath: string,
-  fontsDir?: string
+/**
+ * Composite transparent PNG caption frames (from an ffconcat list) onto the
+ * source video. Uses eof_action=pass so the video continues normally after
+ * the last caption. PNG frames are produced by generateCaptionFrames() in caption-canvas.ts.
+ */
+export function burnCaptionFrames(
+  inputVideoPath: string,
+  concatListPath: string,
+  outputPath: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const escapedSubtitlesPath = subtitlesPath.replace(/'/g, "'\\''").replace(/:/g, "\\:");
-    const escapedFontsDir = fontsDir?.replace(/'/g, "'\\''").replace(/:/g, "\\:");
-    const filterStr = escapedFontsDir
-      ? `subtitles='${escapedSubtitlesPath}':fontsdir='${escapedFontsDir}'`
-      : `subtitles='${escapedSubtitlesPath}'`;
-    ffmpeg(inputPath)
-      .videoFilter(filterStr)
-      .videoCodec("libx264")
-      .outputOptions("-c:a", "copy")
-      .output(outputPath)
-      .on("end", () => resolve())
-      .on("error", (err: Error) => reject(err))
-      .run();
+    const bin = ffmpegPath ?? "ffmpeg";
+    const args = [
+      "-i", inputVideoPath,
+      "-f", "concat", "-safe", "0", "-i", concatListPath,
+      "-filter_complex", "[1:v]format=rgba[cap];[0:v][cap]overlay=eof_action=pass[out]",
+      "-map", "[out]",
+      "-map", "0:a?",
+      "-c:v", "libx264",
+      "-c:a", "copy",
+      "-y",
+      outputPath,
+    ];
+    execFile(bin, args, { maxBuffer: 50 * 1024 * 1024 }, (err, _stdout, stderr) => {
+      if (err) reject(new Error(`ffmpeg burnCaptionFrames: ${stderr}`));
+      else resolve();
+    });
   });
 }

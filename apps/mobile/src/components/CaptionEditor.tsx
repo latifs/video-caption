@@ -624,7 +624,7 @@ export function CaptionEditor({
       </View>
 
       {/* Horizontal timeline with playhead */}
-      <View className="mb-2 overflow-hidden rounded-xl border-2 border-primary bg-primary/[0.08]">
+      <View className="mb-2 overflow-hidden rounded-xl border-2 border-primary bg-primary-muted">
         <ScrollView
           ref={scrollViewRef}
           horizontal
@@ -648,7 +648,7 @@ export function CaptionEditor({
                     onLongPress={() => handleWordEdit(fw)}
                     disabled={saving}
                     className={cn(
-                      'rounded bg-white/[0.08] px-1.5 py-1',
+                      'rounded bg-black/[0.05] dark:bg-white/[0.08] px-1.5 py-1',
                       activeWordIndex === fw.flatIndex && 'bg-primary',
                     )}
                   >
@@ -676,7 +676,7 @@ export function CaptionEditor({
 
             {/* Overlay row */}
             {sortedOverlays.length > 0 && wordPosSnapshot.size > 0 && (
-              <View className="h-[30px] border-t border-t-white/15">
+              <View className="h-[30px] border-t border-t-border">
                 {sortedOverlays.map((overlay) => {
                   const isActive =
                     currentTime >= overlay.start && currentTime <= overlay.end;
@@ -705,7 +705,7 @@ export function CaptionEditor({
                         )}
                       >
                         <Text
-                          className="text-xs font-semibold text-violet-300"
+                          className="text-xs font-semibold text-primary"
                           numberOfLines={1}
                         >
                           {overlay.text}

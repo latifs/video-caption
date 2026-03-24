@@ -5,13 +5,13 @@ import fs from "fs";
 import path from "path";
 import { supabase } from "./lib/supabase";
 import { callApiCallback } from "./lib/api";
-import { extractAudio, burnSubtitles, getVideoDimensions } from "./lib/ffmpeg";
+import { extractAudio, burnCaptionFrames, getVideoDimensions } from "./lib/ffmpeg";
 import {
   buildCaptionDataFromWhisperX,
   getWhisperXDuration,
 } from "./lib/caption-data";
 import { alignWithWhisperX } from "./lib/whisperx";
-import { captionDataToAss } from "./lib/caption-ass";
+import { generateCaptionFrames } from "./lib/caption-canvas";
 import type { CaptionData } from "./types/caption";
 
 const app = express();
@@ -19,16 +19,6 @@ app.use(express.json({ limit: "5mb" }));
 
 const WORKER_SECRET = process.env.WORKER_SECRET!;
 
-/**
- * Resolve a directory containing font files for libass.
- * Checked in order: FONTS_DIR env var, platform defaults.
- */
-function getFontsDir(): string | undefined {
-  if (process.env.FONTS_DIR) return process.env.FONTS_DIR;
-  if (process.platform === "darwin") return "/Library/Fonts";
-  // Linux (Docker with fonts-liberation installed)
-  return "/usr/share/fonts";
-}
 
 async function processVideo(videoId: string, rawUrl: string, language?: string): Promise<void> {
   const tmpDir = path.join("/tmp", videoId);
@@ -92,7 +82,6 @@ async function exportVideo(
     await callApiCallback(videoId, { status: "exporting" });
 
     const inputPath = path.join(tmpDir, "input.mp4");
-    const assPath = path.join(tmpDir, "subtitles.ass");
     const outputPath = path.join(tmpDir, "output.mp4");
 
     // Download raw video
@@ -101,15 +90,19 @@ async function exportVideo(
     });
     fs.writeFileSync(inputPath, Buffer.from(response.data));
 
-    // Probe actual video dimensions so ASS scales correctly at any resolution
+    // Probe actual video dimensions so canvas scales correctly at any resolution
     const { width: videoWidth, height: videoHeight } = await getVideoDimensions(inputPath);
+    console.log(`[${videoId}] probed ${videoWidth}x${videoHeight}`);
 
-    // Convert caption data to ASS (styled subtitles matching UI overlay)
-    const assContent = captionDataToAss(captionData, videoWidth, videoHeight, captionStyle);
-    fs.writeFileSync(assPath, assContent);
-
-    // Burn subtitles (pass fontsdir so libass can find Arial / Liberation Sans)
-    await burnSubtitles(inputPath, assPath, outputPath, getFontsDir());
+    // Render caption frames to transparent PNGs and composite onto video
+    const { concatListPath } = generateCaptionFrames(
+      tmpDir,
+      captionData,
+      videoWidth,
+      videoHeight,
+      captionStyle ?? "classic"
+    );
+    await burnCaptionFrames(inputPath, concatListPath, outputPath);
 
     // Upload processed video — include a timestamp in the filename so each
     // re-export is a distinct storage object, bypassing CDN cache entirely.
