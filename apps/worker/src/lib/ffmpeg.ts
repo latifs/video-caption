@@ -70,8 +70,15 @@ export function burnCaptionFrames(
       outputPath,
     ];
     execFile(bin, args, { maxBuffer: 50 * 1024 * 1024 }, (err, _stdout, stderr) => {
-      if (err) reject(new Error(`ffmpeg burnCaptionFrames: ${stderr}`));
-      else resolve();
+      if (err) {
+        const parts: string[] = ["ffmpeg burnCaptionFrames failed"];
+        if (err.message) parts.push(`error: ${err.message}`);
+        const stderrText = stderr ? stderr.toString().trim() : "";
+        if (stderrText) parts.push(`stderr: ${stderrText}`);
+        reject(new Error(parts.join(" | ")));
+        return;
+      }
+      resolve();
     });
   });
 }

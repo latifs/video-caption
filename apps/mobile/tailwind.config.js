@@ -37,6 +37,10 @@ module.exports = {
           DEFAULT: "var(--color-card)",
           foreground: "var(--color-card-foreground)",
         },
+        popover: {
+          DEFAULT: "var(--color-popover)",
+          foreground: "var(--color-popover-foreground)",
+        },
         success: {
           DEFAULT: "var(--color-success)",
         },

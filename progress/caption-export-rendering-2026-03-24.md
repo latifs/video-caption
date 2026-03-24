@@ -77,3 +77,41 @@ Uses a bundled Skia binary — no system library dependencies (unlike the `canva
 - **`eof_action=pass`** instead of `shortest=1` — prevents video from freezing on the last caption frame when the video continues past the last spoken word
 - **`textBaseline = 'middle'`** — Skia's `'top'` baseline includes internal font leading that shifts glyphs below the intended position, causing text to appear at the bottom of the background box; `'middle'` centers the glyphs reliably
 - **Button text colors** — fixed several buttons with `bg-primary` using `text-foreground` (dark) instead of `text-primary-foreground` (light), making text unreadable on the dark green button background
+
+## Post-merge fixes (Copilot PR review)
+
+### overlayTrack rendering
+
+`generateCaptionFrames()` previously ignored `captionData.overlayTrack`, causing user-created overlays to be missing in exported videos. Fixed by:
+
+- Adding `drawOverlays()` — renders each active `Overlay` onto the canvas at its `position.x`/`position.y`, using its own `style.fontSize`, `style.color`, and `style.backgroundOpacity`
+- `renderCaptionFrame()` now accepts `activeOverlays` and calls `drawOverlays` after the speech caption layer
+- `renderEmptyFrame()` now accepts `activeOverlays` for overlay-only frames (silence periods where overlays are active but no speech is showing)
+- `pushGap()` inner function slices silence intervals at overlay start/end boundaries and caches overlay-only frames by overlay id set to avoid redundant PNG writes
+
+### Between-word no-highlight intervals
+
+Previously, a word's highlighted frame lasted from `word.start` to `next.start`, keeping the active color during any natural pause between words. In the in-app preview, `findActiveWordIndex()` returns `-1` between words. Fixed by:
+
+- Ending the highlighted frame at `min(word.end, next.start)`
+- When `next.start > word.end + 0.001`, inserting an additional frame with `activeWordIdx = -1` for that gap (all words render in plain `textColor`, matching the preview)
+
+### `popover` color token restored
+
+`bg-popover` / `text-popover-foreground` are used by modal components (`OverlayModal`, `EditWordModal`, `OverlayList`) but the `popover` entry had been dropped from `tailwind.config.js` during the theme migration. Re-added backed by `var(--color-popover)` / `var(--color-popover-foreground)` CSS variables, with values defined in both `lightThemeVars` and `darkThemeVars` in `theme.ts`.
+
+### `burnCaptionFrames` error message improved
+
+`execFile` errors now include both `err.message` (the Node.js exception description) and `stderr` (ffmpeg diagnostic output), joined with ` | `. Previously only `stderr` was included, which could be empty when the process failed to start.
+
+### Vitest tests added for `generateCaptionFrames`
+
+New test file `apps/worker/src/__tests__/caption-canvas.test.ts` covers:
+- Group splitting at the `SENTENCE_GAP_S` boundary
+- Between-word no-highlight gap frames
+- Frame duration totals and chronological ordering
+- Empty input producing at least one valid frame
+- `overlayTrack` frames appearing during pre-speech silence
+- No overlay frames when `overlayTrack` is empty
+
+`@napi-rs/canvas` and `fs` are fully mocked so tests run without Skia or disk I/O.

@@ -1,7 +1,7 @@
 import { createCanvas, type CanvasRenderingContext2D } from "@napi-rs/canvas";
 import * as fs from "fs";
 import * as path from "path";
-import type { CaptionData, SpeechWord } from "../types/caption";
+import type { CaptionData, Overlay, SpeechWord } from "../types/caption";
 
 /** Minimum gap (seconds) between words to treat as a sentence boundary. */
 const SENTENCE_GAP_S = 0.3;
@@ -110,13 +110,89 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
-function renderEmptyFrame(
-  outputPath: string,
+function drawOverlays(
+  ctx: CanvasRenderingContext2D,
+  overlays: Overlay[],
   videoWidth: number,
   videoHeight: number
 ): void {
-  // createCanvas produces a transparent canvas by default
+  for (const overlay of overlays) {
+    const fontSize = overlay.style.fontSize;
+    ctx.font = `normal ${fontSize}px Arial`;
+    ctx.textBaseline = "middle";
+
+    const paddingH = Math.round(fontSize * 0.75);
+    const paddingV = Math.round(fontSize * 0.375);
+    const borderRadius = Math.round(fontSize * 0.25);
+    const maxTextWidth = videoWidth * 0.85;
+    const lineHeight = Math.round(fontSize * 1.25);
+
+    const lines = wrapWords(ctx, overlay.text.split(" "), maxTextWidth);
+
+    let maxLineWidth = 0;
+    for (const line of lines) {
+      const w = ctx.measureText(line.join(" ")).width;
+      if (w > maxLineWidth) maxLineWidth = w;
+    }
+
+    const boxWidth = maxLineWidth + paddingH * 2;
+    const boxHeight = lines.length * lineHeight + paddingV * 2;
+
+    // position.x: "left" | "center" | "right"
+    // position.y: fraction of video height (0–1), treated as the vertical center of the box
+    let boxX: number;
+    if (overlay.position.x === "left") {
+      boxX = videoWidth * 0.04;
+    } else if (overlay.position.x === "right") {
+      boxX = videoWidth - boxWidth - videoWidth * 0.04;
+    } else {
+      boxX = (videoWidth - boxWidth) / 2;
+    }
+    const boxY = overlay.position.y * videoHeight - boxHeight / 2;
+
+    // Background
+    const opacity = Math.max(0, Math.min(1, overlay.style.backgroundOpacity));
+    if (opacity > 0) {
+      // Parse hex color and apply opacity
+      const hex = overlay.style.backgroundColor.replace("#", "");
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      ctx.fillStyle = `rgba(${r},${g},${b},${opacity})`;
+      drawRoundedRect(ctx, boxX, boxY, boxWidth, boxHeight, borderRadius);
+      ctx.fill();
+    }
+
+    // Text
+    ctx.fillStyle = overlay.style.color;
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+      const line = lines[lineIdx];
+      const lineWidth = ctx.measureText(line.join(" ")).width;
+      let wordX: number;
+      if (overlay.position.x === "left") {
+        wordX = boxX + paddingH;
+      } else if (overlay.position.x === "right") {
+        wordX = boxX + paddingH;
+      } else {
+        wordX = (videoWidth - lineWidth) / 2;
+      }
+      const wordY = boxY + paddingV + lineIdx * lineHeight + lineHeight / 2;
+      ctx.fillText(line.join(" "), wordX, wordY);
+    }
+  }
+}
+
+function renderEmptyFrame(
+  outputPath: string,
+  videoWidth: number,
+  videoHeight: number,
+  activeOverlays: Overlay[] = []
+): void {
   const canvas = createCanvas(videoWidth, videoHeight);
+  if (activeOverlays.length > 0) {
+    const ctx = canvas.getContext("2d");
+    drawOverlays(ctx, activeOverlays, videoWidth, videoHeight);
+  }
   fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
 }
 
@@ -126,7 +202,8 @@ function renderCaptionFrame(
   videoHeight: number,
   groupWords: SpeechWord[],
   activeWordIdx: number,
-  style: CanvasStyleConfig
+  style: CanvasStyleConfig,
+  activeOverlays: Overlay[] = []
 ): void {
   const { fontSize, lineHeight, paddingH, paddingV, borderRadius, maxTextWidth, bottomY } =
     computeLayout(videoWidth, videoHeight);
@@ -197,6 +274,10 @@ function renderCaptionFrame(
     }
   }
 
+  if (activeOverlays.length > 0) {
+    drawOverlays(ctx, activeOverlays, videoWidth, videoHeight);
+  }
+
   fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
 }
 
@@ -214,9 +295,15 @@ function writeConcatList(concatListPath: string, frames: FrameEntry[]): void {
   fs.writeFileSync(concatListPath, lines.join("\n"));
 }
 
+/** Return the overlays from overlayTrack that are active at the given time. */
+function getActiveOverlays(overlays: Overlay[], time: number): Overlay[] {
+  return overlays.filter((o) => o.start <= time && time < o.end);
+}
+
 /**
  * Generate transparent PNG caption frames for every word event and write an
  * ffconcat list file. The caller passes this list to burnCaptionFrames().
+ * Both speech captions and overlayTrack items are rendered into the same frames.
  */
 export function generateCaptionFrames(
   tmpDir: string,
@@ -227,12 +314,61 @@ export function generateCaptionFrames(
 ): { concatListPath: string; frameEntries: FrameEntry[] } {
   const style = CANVAS_STYLES[styleId] ?? CANVAS_STYLES.classic;
   const frames: FrameEntry[] = [];
+  const overlays = captionData.overlayTrack ?? [];
 
+  // Pre-render a reusable empty frame (no speech, no overlays)
   const emptyPath = path.join(tmpDir, "caption_empty.png");
-  renderEmptyFrame(emptyPath, videoWidth, videoHeight);
+  renderEmptyFrame(emptyPath, videoWidth, videoHeight, []);
+
+  // Cache for overlay-only frames keyed by sorted overlay ids at that time
+  const overlayFrameCache = new Map<string, string>();
 
   let timelinePos = 0;
   let frameCount = 0;
+
+  /**
+   * Push a silence/gap segment from timelinePos to `until`.
+   * During this gap there may still be active overlays, so we can't always
+   * use the static empty frame — we must check at each overlay boundary.
+   */
+  function pushGap(until: number): void {
+    if (until <= timelinePos + 0.001) return;
+
+    // Collect overlay boundaries within this gap
+    const boundaries = new Set<number>([timelinePos, until]);
+    for (const o of overlays) {
+      if (o.start > timelinePos && o.start < until) boundaries.add(o.start);
+      if (o.end > timelinePos && o.end < until) boundaries.add(o.end);
+    }
+    const sorted = Array.from(boundaries).sort((a, b) => a - b);
+
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const segStart = sorted[i];
+      const segEnd = sorted[i + 1];
+      const duration = segEnd - segStart;
+      if (duration <= 0.001) continue;
+
+      const midTime = segStart + duration / 2;
+      const active = getActiveOverlays(overlays, midTime);
+
+      let framePath: string;
+      if (active.length === 0) {
+        framePath = emptyPath;
+      } else {
+        const cacheKey = active.map((o) => o.id).sort().join("|");
+        if (!overlayFrameCache.has(cacheKey)) {
+          const p = path.join(tmpDir, `caption_overlay_${frameCount++}.png`);
+          renderEmptyFrame(p, videoWidth, videoHeight, active);
+          overlayFrameCache.set(cacheKey, p);
+        }
+        framePath = overlayFrameCache.get(cacheKey)!;
+      }
+
+      frames.push({ path: framePath, duration });
+    }
+
+    timelinePos = until;
+  }
 
   for (const seg of captionData.speechTrack.segments) {
     if (seg.words.length === 0) continue;
@@ -251,35 +387,43 @@ export function generateCaptionFrames(
           ? seg.words[groupStarts[g + 1]].start
           : seg.words[seg.words.length - 1].end;
 
-      // Silence gap before this group
-      if (groupStart > timelinePos + 0.001) {
-        frames.push({ path: emptyPath, duration: groupStart - timelinePos });
-      }
+      // Gap before this group (may contain overlay-only frames)
+      pushGap(groupStart);
 
-      // One frame per word event (active word advances across the group)
+      // One frame per word event (active word advances across the group).
+      // Each word is highlighted only for [word.start, min(word.end, nextWord.start)].
+      // If next.start > word.end, insert a no-highlight frame for that gap so the
+      // exported video matches the preview (findActiveWordIndex returns -1 between words).
       for (let wIdx = 0; wIdx < groupWords.length; wIdx++) {
-        const eventEnd =
+        const word = groupWords[wIdx];
+        const nextStart =
           wIdx + 1 < groupWords.length
             ? groupWords[wIdx + 1].start
             : groupEnd;
 
-        const duration = eventEnd - groupWords[wIdx].start;
-        if (duration <= 0) continue;
+        // Highlighted frame: word is active until its own end (or next word starts)
+        const highlightEnd = Math.min(word.end, nextStart);
+        const highlightDuration = highlightEnd - word.start;
 
-        const framePath = path.join(
-          tmpDir,
-          `caption_frame_${frameCount++}.png`
-        );
-        renderCaptionFrame(
-          framePath,
-          videoWidth,
-          videoHeight,
-          groupWords,
-          wIdx,
-          style
-        );
-        frames.push({ path: framePath, duration });
-        timelinePos = eventEnd;
+        if (highlightDuration > 0) {
+          const midTime = word.start + highlightDuration / 2;
+          const activeOverlays = getActiveOverlays(overlays, midTime);
+          const framePath = path.join(tmpDir, `caption_frame_${frameCount++}.png`);
+          renderCaptionFrame(framePath, videoWidth, videoHeight, groupWords, wIdx, style, activeOverlays);
+          frames.push({ path: framePath, duration: highlightDuration });
+          timelinePos = highlightEnd;
+        }
+
+        // Gap frame: word ended but next word hasn't started yet — no active highlight
+        if (nextStart > word.end + 0.001) {
+          const gapDuration = nextStart - word.end;
+          const midTime = word.end + gapDuration / 2;
+          const activeOverlays = getActiveOverlays(overlays, midTime);
+          const framePath = path.join(tmpDir, `caption_frame_${frameCount++}.png`);
+          renderCaptionFrame(framePath, videoWidth, videoHeight, groupWords, -1, style, activeOverlays);
+          frames.push({ path: framePath, duration: gapDuration });
+          timelinePos = nextStart;
+        }
       }
     }
   }
