@@ -91,7 +91,7 @@ export default function LoginScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text className="text-lg font-bold tracking-wide text-white">
+            <Text className="text-lg font-bold tracking-wide text-primary-foreground">
               Sign In
             </Text>
           )}

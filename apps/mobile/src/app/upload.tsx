@@ -88,7 +88,7 @@ export default function UploadScreen() {
         {uploading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text className="text-base font-semibold text-white">
+          <Text className="text-base font-semibold text-primary-foreground">
             Choose Video
           </Text>
         )}

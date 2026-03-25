@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, useColorScheme } from 'react-native';
 import { Play } from '@/lib/icons';
 
 interface VideoRow {
@@ -13,18 +13,18 @@ interface VideoListItemProps {
   onPress: () => void;
 }
 
-const statusColor = (status: string) => {
+const statusColor = (status: string, isDark: boolean) => {
   switch (status) {
     case 'completed':
-      return '#34C759';
+      return isDark ? '#4ade80' : '#15803d';
     case 'failed':
-      return '#FF3B30';
+      return isDark ? '#EF4444' : '#DC2626';
     case 'processing':
-      return '#A78BFA';
+      return isDark ? '#D5ECE5' : '#2E5D4E';
     case 'uploaded':
-      return '#60A5FA';
+      return isDark ? 'rgba(232,240,236,0.5)' : '#5A6B65';
     default:
-      return 'rgba(255,255,255,0.4)';
+      return isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
   }
 };
 
@@ -44,7 +44,8 @@ const formatDuration = (sec: number | null) => {
 };
 
 export function VideoListItem({ video, onPress }: VideoListItemProps) {
-  const color = statusColor(video.status);
+  const colorScheme = useColorScheme();
+  const color = statusColor(video.status, colorScheme === 'dark');
 
   return (
     <TouchableOpacity

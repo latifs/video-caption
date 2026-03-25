@@ -4,8 +4,10 @@ import {
   ChevronDown,
   Maximize,
   Menu,
+  Moon,
   Pause,
   Play,
+  Sun,
   X,
 } from "lucide-react-native";
 import type { ComponentType } from "react";
@@ -26,8 +28,10 @@ iconWithClassName(ArrowLeft);
 iconWithClassName(ChevronDown);
 iconWithClassName(Maximize);
 iconWithClassName(Menu);
+iconWithClassName(Moon);
 iconWithClassName(Pause);
 iconWithClassName(Play);
+iconWithClassName(Sun);
 iconWithClassName(X);
 
-export { ArrowLeft, ChevronDown, Maximize, Menu, Pause, Play, X };
+export { ArrowLeft, ChevronDown, Maximize, Menu, Moon, Pause, Play, Sun, X };

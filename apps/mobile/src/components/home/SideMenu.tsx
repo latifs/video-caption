@@ -1,6 +1,7 @@
-import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, useColorScheme } from 'react-native';
 import Animated, { type AnimatedStyle } from 'react-native-reanimated';
-import { X } from '@/lib/icons';
+import { Moon, Sun, X } from '@/lib/icons';
+import { setThemePreference } from '@/lib/theme';
 import type { ViewStyle } from 'react-native';
 
 const DRAWER_WIDTH = 280;
@@ -22,7 +23,14 @@ export function SideMenu({
   onClose,
   onSignOut,
 }: SideMenuProps) {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   if (!visible) return null;
+
+  const handleThemeToggle = () => {
+    setThemePreference(isDark ? 'light' : 'dark');
+  };
 
   return (
     <View className="absolute inset-0 z-20">
@@ -44,7 +52,7 @@ export function SideMenu({
         {/* User info */}
         <View className="mb-5 flex-row items-center">
           <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-primary">
-            <Text className="text-lg font-semibold text-foreground">
+            <Text className="text-lg font-semibold text-primary-foreground">
               {user?.email?.[0]?.toUpperCase() || 'U'}
             </Text>
           </View>
@@ -70,6 +78,24 @@ export function SideMenu({
         </TouchableOpacity>
         <TouchableOpacity className="py-3.5">
           <Text className="text-base text-foreground">Help & Support</Text>
+        </TouchableOpacity>
+
+        {/* Appearance toggle */}
+        <TouchableOpacity
+          className="flex-row items-center py-3.5"
+          onPress={handleThemeToggle}
+        >
+          {isDark ? (
+            <Moon size={16} className="mr-2.5 text-muted-foreground" />
+          ) : (
+            <Sun size={16} className="mr-2.5 text-muted-foreground" />
+          )}
+          <Text className="flex-1 text-base text-foreground">Appearance</Text>
+          <View className="rounded-full bg-secondary px-2.5 py-0.5">
+            <Text className="text-xs font-medium text-muted-foreground">
+              {isDark ? 'Dark' : 'Light'}
+            </Text>
+          </View>
         </TouchableOpacity>
 
         {/* Sign out at bottom */}

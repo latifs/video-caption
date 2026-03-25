@@ -18,7 +18,9 @@ import {
   Dimensions,
   ScrollView,
   Animated,
+  useColorScheme,
 } from 'react-native';
+import { THEME_COLORS } from '@/lib/theme';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEventListener } from 'expo';
@@ -198,7 +200,7 @@ const CaptionedVideo = forwardRef<
           className="absolute left-3 top-[50px] h-9 w-9 items-center justify-center rounded-full bg-primary"
           onPress={onBack}
         >
-          <ArrowLeft size={18} className="text-foreground" />
+          <ArrowLeft size={18} className="text-primary-foreground" />
         </TouchableOpacity>
       )}
 
@@ -284,6 +286,8 @@ function StatusSkeleton() {
 }
 
 export default function StatusScreen() {
+  const colorScheme = useColorScheme();
+  const primaryColor = THEME_COLORS[colorScheme === 'dark' ? 'dark' : 'light'].primary;
   const { videoId } = useLocalSearchParams<{ videoId: string }>();
   const { session } = useAuth();
   const router = useRouter();
@@ -493,7 +497,7 @@ export default function StatusScreen() {
                   </Text>
                   {selectedLanguage === lang.code && (
                     <View className="h-5 w-5 items-center justify-center rounded-full bg-primary">
-                      <Text className="text-xs text-foreground">✓</Text>
+                      <Text className="text-xs text-primary-foreground">✓</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -509,7 +513,7 @@ export default function StatusScreen() {
             onPress={handleStartTranscription}
             disabled={startingTranscription}
           >
-            <Text className="text-lg font-semibold text-foreground">
+            <Text className="text-lg font-semibold text-primary-foreground">
               {startingTranscription ? 'Starting...' : 'Start Transcription'}
             </Text>
           </TouchableOpacity>
@@ -521,7 +525,7 @@ export default function StatusScreen() {
   if (status === 'processing') {
     return (
       <View className="flex-1 items-center justify-center bg-background p-5">
-        <ActivityIndicator size="large" color="#8B5CF6" />
+        <ActivityIndicator size="large" color={primaryColor} />
         <Text className="mt-5 text-lg text-foreground">
           Processing your video...
         </Text>
@@ -535,7 +539,7 @@ export default function StatusScreen() {
   if (status === 'exporting') {
     return (
       <View className="flex-1 items-center justify-center bg-background p-5">
-        <ActivityIndicator size="large" color="#8B5CF6" />
+        <ActivityIndicator size="large" color={primaryColor} />
         <Text className="mt-5 text-lg text-foreground">
           Exporting your video...
         </Text>
@@ -564,7 +568,7 @@ export default function StatusScreen() {
           className="rounded-lg bg-primary px-8 py-3.5"
           onPress={handleRetry}
         >
-          <Text className="text-base font-semibold text-foreground">
+          <Text className="text-base font-semibold text-primary-foreground">
             Try Again
           </Text>
         </TouchableOpacity>
@@ -629,7 +633,7 @@ export default function StatusScreen() {
             >
               <Text
                 className={`text-sm font-medium ${
-                  selectedStyle === s.id ? 'text-foreground' : 'text-muted-foreground'
+                  selectedStyle === s.id ? 'text-primary-foreground' : 'text-muted-foreground'
                 }`}
               >
                 {s.label}
@@ -660,7 +664,7 @@ export default function StatusScreen() {
           onPress={handleExport}
           disabled={exporting}
         >
-          <Text className="text-base font-semibold text-foreground">
+          <Text className="text-base font-semibold text-primary-foreground">
             {exporting
               ? 'Exporting...'
               : status === 'completed'

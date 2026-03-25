@@ -7,7 +7,9 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  useColorScheme,
 } from 'react-native';
+import { THEME_COLORS } from '@/lib/theme';
 import {
   useSharedValue,
   useAnimatedStyle,
@@ -34,6 +36,7 @@ interface VideoRow {
 }
 
 export default function HomeScreen() {
+  const colorScheme = useColorScheme();
   const { user, session, signOut } = useAuth();
   const router = useRouter();
   const [videos, setVideos] = useState<VideoRow[]>([]);
@@ -205,7 +208,7 @@ export default function HomeScreen() {
       {/* Uploading overlay */}
       {uploading && (
         <View className="absolute inset-0 z-10 items-center justify-center bg-overlay">
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <ActivityIndicator size="large" color={THEME_COLORS[colorScheme === 'dark' ? 'dark' : 'light'].primary} />
           <Text className="mt-4 text-base text-foreground">
             Uploading video...
           </Text>
@@ -219,7 +222,7 @@ export default function HomeScreen() {
           onPress={() => setShowAddSheet(true)}
           disabled={uploading}
         >
-          <Text className="text-lg font-semibold text-foreground">
+          <Text className="text-lg font-semibold text-primary-foreground">
             Add New Video
           </Text>
         </TouchableOpacity>

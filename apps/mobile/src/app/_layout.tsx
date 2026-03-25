@@ -1,16 +1,18 @@
 import "../../global.css";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { Platform, View, useColorScheme } from "react-native";
 import * as Linking from "expo-linking";
 import { PortalHost } from "@rn-primitives/portal";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { lightThemeVars, darkThemeVars, THEME_COLORS, loadThemePreference } from "@/lib/theme";
 
 function AuthGate() {
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const colorScheme = useColorScheme();
 
   useEffect(() => {
     if (loading) return;
@@ -28,7 +30,7 @@ function AuthGate() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: "#111" },
+        contentStyle: { backgroundColor: THEME_COLORS[colorScheme ?? "light"].background },
         animation: "default",
       }}
     />
@@ -36,6 +38,13 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
+  const themeVars = colorScheme === "dark" ? darkThemeVars : lightThemeVars;
+
+  useEffect(() => {
+    loadThemePreference();
+  }, []);
+
   useEffect(() => {
     if (Platform.OS === "web") return;
 
@@ -59,8 +68,10 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <AuthGate />
-      <PortalHost />
+      <View style={[{ flex: 1 }, themeVars]}>
+        <AuthGate />
+        <PortalHost />
+      </View>
     </AuthProvider>
   );
 }
