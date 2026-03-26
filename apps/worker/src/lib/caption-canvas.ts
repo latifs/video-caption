@@ -116,8 +116,12 @@ function drawOverlays(
   videoWidth: number,
   videoHeight: number
 ): void {
+  // Scale overlay fontSize the same way computeLayout() scales text-base (16pt) to canvas px:
+  // captionFontSize = round(shortEdge * 33 / 720); overlayFontSize preserves the overlay/caption ratio.
+  const captionFontSize = Math.round((Math.min(videoWidth, videoHeight) * 33) / 720);
+
   for (const overlay of overlays) {
-    const fontSize = overlay.style.fontSize;
+    const fontSize = Math.round(overlay.style.fontSize * captionFontSize / 16);
     ctx.font = `normal ${fontSize}px Arial`;
     ctx.textBaseline = "middle";
 

@@ -67,9 +67,12 @@ const CaptionedVideo = forwardRef<
     onPlayingChange?: (isPlaying: boolean) => void;
     onDurationChange?: (duration: number) => void;
     onBack?: () => void;
+    onExport?: () => void;
+    exporting?: boolean;
+    hasExport?: boolean;
   }
 >(function CaptionedVideo(
-  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack },
+  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack, onExport, exporting, hasExport },
   ref,
 ) {
   const player = useVideoPlayer(url, (p) => {
@@ -139,6 +142,7 @@ const CaptionedVideo = forwardRef<
   const handleTap = () => {
     setShowControls(true);
     scheduleHide();
+    togglePlay();
   };
 
   const togglePlay = () => {
@@ -201,6 +205,19 @@ const CaptionedVideo = forwardRef<
           onPress={onBack}
         >
           <ArrowLeft size={18} className="text-primary-foreground" />
+        </TouchableOpacity>
+      )}
+
+      {/* Re-export button at top-right, aligned with back button */}
+      {!fullscreen && onExport && (
+        <TouchableOpacity
+          className={`absolute right-3 top-[50px] rounded-full bg-primary px-3 py-2 ${exporting ? 'opacity-50' : ''}`}
+          onPress={onExport}
+          disabled={exporting}
+        >
+          <Text className="text-xs font-semibold text-primary-foreground">
+            {exporting ? 'Exporting…' : hasExport ? 'Re-export' : 'Export'}
+          </Text>
         </TouchableOpacity>
       )}
 
@@ -589,6 +606,9 @@ export default function StatusScreen() {
           onTimeUpdate={handleTimeUpdate}
           onDurationChange={handleDurationChange}
           onBack={() => router.back()}
+          onExport={handleExport}
+          exporting={exporting}
+          hasExport={!!processedUrl}
         />
       )}
 
@@ -619,7 +639,8 @@ export default function StatusScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 8 }}
+          className="h-14 flex-none"
+          contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 8, alignItems: 'center' }}
         >
           {CAPTION_STYLES.map((s) => (
             <TouchableOpacity
@@ -657,22 +678,6 @@ export default function StatusScreen() {
         />
       )}
 
-      {/* Pinned bottom bar */}
-      <View className="border-t border-t-border bg-background px-4 pb-7 pt-3">
-        <TouchableOpacity
-          className={`items-center rounded-xl bg-primary py-3.5 ${exporting ? 'opacity-50' : ''}`}
-          onPress={handleExport}
-          disabled={exporting}
-        >
-          <Text className="text-base font-semibold text-primary-foreground">
-            {exporting
-              ? 'Exporting...'
-              : status === 'completed'
-                ? 'Re-export Video'
-                : 'Export Video'}
-          </Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }

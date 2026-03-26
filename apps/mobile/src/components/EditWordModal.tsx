@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, TextInput, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { Portal } from '@rn-primitives/portal';
 
 interface EditWordModalProps {
   visible: boolean;
@@ -15,9 +16,10 @@ export function EditWordModal({
   onCancel,
   onSave,
 }: EditWordModalProps) {
+  if (!visible) return null;
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View className="flex-1 items-center justify-center bg-overlay">
+    <Portal name="edit-word-modal">
+      <View style={StyleSheet.absoluteFill} className="items-center justify-center bg-overlay">
         <View className="w-[85%] rounded-xl border border-border bg-popover p-5">
           <Text className="mb-3 text-lg font-semibold text-foreground">
             Edit Word
@@ -49,6 +51,6 @@ export function EditWordModal({
           </View>
         </View>
       </View>
-    </Modal>
+    </Portal>
   );
 }

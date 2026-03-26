@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, TextInput, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { Portal } from '@rn-primitives/portal';
 
 export type OverlayModalState =
   | {
@@ -42,9 +43,10 @@ export function OverlayModal({
     return `${(e - s).toFixed(1)}s`;
   })();
 
+  if (state === null) return null;
   return (
-    <Modal visible={state !== null} transparent animationType="fade">
-      <View className="flex-1 items-center justify-center bg-overlay">
+    <Portal name="overlay-modal">
+      <View style={StyleSheet.absoluteFill} className="items-center justify-center bg-overlay">
         <View className="w-[85%] rounded-xl border border-border bg-popover p-5">
           <Text className="mb-3 text-lg font-semibold text-foreground">
             {state?.mode === 'edit' ? 'Edit Overlay' : 'Add Overlay'}
@@ -128,6 +130,6 @@ export function OverlayModal({
           </View>
         </View>
       </View>
-    </Modal>
+    </Portal>
   );
 }
