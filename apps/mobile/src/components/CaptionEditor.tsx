@@ -12,13 +12,10 @@ import {
   Pressable,
   Alert,
   ScrollView,
-  PanResponder,
   useWindowDimensions,
   type LayoutChangeEvent,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
-  type GestureResponderEvent,
-  type PanResponderGestureState,
 } from 'react-native';
 import { cn } from '@/lib/utils';
 import { EditWordModal } from './EditWordModal';
@@ -82,32 +79,21 @@ export function CaptionEditor({
     wordIndex: number;
     text: string;
   } | null>(null);
-  const [overlayModal, setOverlayModal] = useState<OverlayModalState | null>(null);
+  const [overlayModal, setOverlayModal] = useState<OverlayModalState | null>(
+    null,
+  );
   const [saving, setSaving] = useState(false);
   // Snapshot of measured word positions — stored in state so React re-renders overlays
   const [wordPosSnapshot, setWordPosSnapshot] = useState<
     Map<number, { x: number; width: number }>
   >(new Map());
-  // Drag state for overlay chips
-  const [dragging, setDragging] = useState<{
-    overlayId: string;
-    startX: number;
-    dx: number;
-  } | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const wordPositions = useRef<Map<number, { x: number; width: number }>>(
     new Map(),
   );
   const isUserScrolling = useRef(false);
-  const isDraggingChip = useRef(false);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSeekTime = useRef(0);
-  // Refs for drag handler access to latest state
-  const draggingRef = useRef(dragging);
-  draggingRef.current = dragging;
-  const captionDataRef = useRef(captionData);
-  captionDataRef.current = captionData;
 
   const { width: viewportWidth } = useWindowDimensions();
   const halfWidth = viewportWidth / 2;
@@ -199,6 +185,10 @@ export function CaptionEditor({
 
   const anchorPoints = useCallback(() => {
     const points: { x: number; time: number }[] = [];
+    // Add leading anchor so t=0 maps to x=0 (the leading spacer origin)
+    if (flatWords.length > 0 && flatWords[0].start > 0) {
+      points.push({ x: 0, time: 0 });
+    }
     let lastMeasuredPos: { x: number; width: number } | null = null;
     for (let i = 0; i < flatWords.length; i++) {
       const pos = wordPositions.current.get(i);
@@ -400,7 +390,8 @@ export function CaptionEditor({
 
   const submitOverlayModal = async () => {
     if (!overlayModal) return;
-    const { mode, overlayId, text, startText, endText } = overlayModal;
+    const { mode, text, startText, endText } = overlayModal;
+    const overlayId = overlayModal.mode === 'edit' ? overlayModal.overlayId : undefined;
 
     if (!text.trim()) {
       Alert.alert('Error', 'Text cannot be empty.');
@@ -484,7 +475,7 @@ export function CaptionEditor({
     ]);
   };
 
-  // --- Overlay chip drag helpers ---
+  // --- Overlay chip position helpers ---
   const getOverlayLeftPos = useCallback(
     (overlay: Overlay) => {
       let bestIdx = 0;
@@ -500,104 +491,6 @@ export function CaptionEditor({
       return pos ? pos.x : 0;
     },
     [flatWords, wordPosSnapshot],
-  );
-
-  const createChipPanResponder = useCallback(
-    (overlay: Overlay, leftPos: number) =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (
-          _: GestureResponderEvent,
-          gs: PanResponderGestureState,
-        ) => Math.abs(gs.dx) > 5,
-        onPanResponderGrant: () => {
-          isDraggingChip.current = true;
-          setDragging({ overlayId: overlay.id, startX: leftPos, dx: 0 });
-          longPressTimer.current = setTimeout(() => {
-            const cur = draggingRef.current;
-            if (cur && Math.abs(cur.dx) < 5) {
-              isDraggingChip.current = false;
-              setDragging(null);
-              handleEditOverlay(overlay);
-            }
-          }, 500);
-        },
-        onPanResponderMove: (
-          _: GestureResponderEvent,
-          gs: PanResponderGestureState,
-        ) => {
-          if (Math.abs(gs.dx) > 5 && longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-          }
-          setDragging((prev) => (prev ? { ...prev, dx: gs.dx } : null));
-        },
-        onPanResponderRelease: (
-          _: GestureResponderEvent,
-          gs: PanResponderGestureState,
-        ) => {
-          if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-          }
-          isDraggingChip.current = false;
-
-          const cur = draggingRef.current;
-          if (!cur) {
-            setDragging(null);
-            return;
-          }
-
-          if (Math.abs(gs.dx) < 5) {
-            setDragging(null);
-            onSeekTo(overlay.start);
-            return;
-          }
-
-          const newX = cur.startX + gs.dx;
-          const newTime = xToTime(newX);
-          if (newTime != null) {
-            const cd = captionDataRef.current;
-            const ov = cd.overlayTrack.find((o) => o.id === cur.overlayId);
-            if (ov) {
-              const duration = ov.end - ov.start;
-              const newStart = Math.max(0, newTime);
-              const newEnd = newStart + duration;
-              onCaptionDataChange({
-                ...cd,
-                overlayTrack: cd.overlayTrack.map((o) =>
-                  o.id === cur.overlayId
-                    ? { ...o, start: newStart, end: newEnd }
-                    : o,
-                ),
-              });
-              updateOverlay(
-                videoId,
-                cur.overlayId,
-                { start: newStart, end: newEnd },
-                accessToken,
-              );
-            }
-          }
-          setDragging(null);
-        },
-        onPanResponderTerminate: () => {
-          if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-          }
-          isDraggingChip.current = false;
-          setDragging(null);
-        },
-      }),
-    [
-      xToTime,
-      onCaptionDataChange,
-      onSeekTo,
-      videoId,
-      accessToken,
-      handleEditOverlay,
-    ],
   );
 
   // --- Render ---
@@ -619,17 +512,16 @@ export function CaptionEditor({
           {formatTime(currentTime)}
         </Text>
         <Text className="text-xs text-muted-foreground">
-          Tap to seek · Hold to edit · Drag to move
+          Tap to seek · Hold to edit
         </Text>
       </View>
 
       {/* Horizontal timeline with playhead */}
-      <View className="mb-2 overflow-hidden rounded-xl border-2 border-primary bg-primary-muted">
+      <View className="mb-2 overflow-hidden rounded-xl bg-primary-muted">
         <ScrollView
           ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
-          scrollEnabled={dragging === null}
           contentContainerStyle={{ paddingHorizontal: halfWidth }}
           onScroll={handleScroll}
           onScrollBeginDrag={handleScrollBeginDrag}
@@ -640,6 +532,10 @@ export function CaptionEditor({
           <View>
             {/* Speech row */}
             <View className="min-h-[40px] flex-row items-center">
+              {/* Leading spacer: silence before the first word */}
+              {flatWords.length > 0 && flatWords[0].start > 0 && (
+                <View style={{ width: flatWords[0].start * PX_PER_SECOND, alignSelf: 'stretch' }} />
+              )}
               {flatWords.map((fw, idx) => (
                 <React.Fragment key={fw.flatIndex}>
                   <Pressable
@@ -651,6 +547,7 @@ export function CaptionEditor({
                       'rounded bg-black/[0.05] dark:bg-white/[0.08] px-1.5 py-1',
                       activeWordIndex === fw.flatIndex && 'bg-primary',
                     )}
+                    style={{ minWidth: Math.min(fw.end - fw.start, MAX_WORD_DURATION_S) * PX_PER_SECOND }}
                   >
                     <Text
                       className={cn(
@@ -676,42 +573,36 @@ export function CaptionEditor({
 
             {/* Overlay row */}
             {sortedOverlays.length > 0 && wordPosSnapshot.size > 0 && (
-              <View className="h-[30px] border-t border-t-border">
+              <View className="min-h-[40px] flex-row items-center border-t border-t-border">
                 {sortedOverlays.map((overlay) => {
                   const isActive =
                     currentTime >= overlay.start && currentTime <= overlay.end;
-                  const leftPos = getOverlayLeftPos(overlay);
-                  const isDraggingThis = dragging?.overlayId === overlay.id;
-                  const chipLeft =
-                    isDraggingThis && dragging
-                      ? dragging.startX + dragging.dx
-                      : leftPos;
-                  const panResponder = createChipPanResponder(overlay, leftPos);
+                  const startX = timeToX(overlay.start) ?? getOverlayLeftPos(overlay);
+                  const endX = timeToX(overlay.end) ?? startX;
+                  const chipWidth = Math.max(endX - startX, 0);
                   return (
-                    <View
+                    <Pressable
                       key={overlay.id}
+                      onPress={() => onSeekTo(overlay.start)}
+                      onLongPress={() => handleEditOverlay(overlay)}
+                      disabled={saving}
                       className={cn(
-                        'absolute top-0.5',
-                        isDraggingThis &&
-                          'z-10 opacity-85 shadow-md shadow-primary/30',
+                        'absolute top-0.5 rounded bg-black/[0.05] dark:bg-white/[0.08] px-1.5 py-1',
+                        isActive && 'bg-primary',
                       )}
-                      style={{ left: chipLeft }}
-                      {...panResponder.panHandlers}
+                      style={{ left: startX, width: chipWidth }}
                     >
-                      <View
+                      <Text
                         className={cn(
-                          'max-w-[100px] rounded border border-primary-muted bg-primary-muted px-2 py-0.5',
-                          isActive && 'border-primary bg-primary-muted',
+                          'text-base text-foreground',
+                          isActive && 'text-white',
+                          saving && 'opacity-50',
                         )}
+                        numberOfLines={1}
                       >
-                        <Text
-                          className="text-xs font-semibold text-primary"
-                          numberOfLines={1}
-                        >
-                          {overlay.text}
-                        </Text>
-                      </View>
-                    </View>
+                        {overlay.text}
+                      </Text>
+                    </Pressable>
                   );
                 })}
               </View>

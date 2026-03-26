@@ -76,7 +76,7 @@ export async function POST(
     text: text.trim(),
     start,
     end,
-    position: position || { x: "center", y: 0.9 },
+    position: position || { x: "center", y: 0.1 },
     style: style || {
       fontSize: 24,
       color: "#ffffff",
