@@ -198,7 +198,7 @@ export function CaptionEditor({
       if (!(t >= 0)) continue;
       points.push({ x: pos.x + pos.width / 2, time: t });
     }
-    if (lastMeasuredPos && trailingWidth > 0 && duration > 0) {
+    if (lastMeasuredPos && duration > 0) {
       points.push({
         x: lastMeasuredPos.x + lastMeasuredPos.width + trailingWidth,
         time: duration,
@@ -586,6 +586,7 @@ export function CaptionEditor({
                       onPress={() => onSeekTo(overlay.start)}
                       onLongPress={() => handleEditOverlay(overlay)}
                       disabled={saving}
+                      hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
                       className={cn(
                         'absolute top-0.5 rounded bg-black/[0.05] dark:bg-white/[0.08] px-1.5 py-1',
                         isActive && 'bg-primary',

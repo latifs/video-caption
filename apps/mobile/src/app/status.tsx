@@ -69,9 +69,10 @@ const CaptionedVideo = forwardRef<
     onBack?: () => void;
     onExport?: () => void;
     exporting?: boolean;
+    hasExport?: boolean;
   }
 >(function CaptionedVideo(
-  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack, onExport, exporting },
+  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack, onExport, exporting, hasExport },
   ref,
 ) {
   const player = useVideoPlayer(url, (p) => {
@@ -215,7 +216,7 @@ const CaptionedVideo = forwardRef<
           disabled={exporting}
         >
           <Text className="text-xs font-semibold text-primary-foreground">
-            {exporting ? 'Exporting…' : 'Re-export'}
+            {exporting ? 'Exporting…' : hasExport ? 'Re-export' : 'Export'}
           </Text>
         </TouchableOpacity>
       )}
@@ -607,6 +608,7 @@ export default function StatusScreen() {
           onBack={() => router.back()}
           onExport={handleExport}
           exporting={exporting}
+          hasExport={!!processedUrl}
         />
       )}
 
