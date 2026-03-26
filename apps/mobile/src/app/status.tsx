@@ -20,11 +20,13 @@ import {
   Animated,
   useColorScheme,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME_COLORS } from '@/lib/theme';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEventListener } from 'expo';
-import { ArrowLeft, Play, Pause, X, Maximize, ChevronDown } from '@/lib/icons';
+import { ArrowLeft, Play, Pause, X, ChevronDown, Eye, Palette, PenLine, Download } from '@/lib/icons';
+import { BottomSheet } from '@/components/BottomSheet';
 import { useAuth } from '@/lib/auth';
 import { getVideoStatus, processVideo, retryVideo, triggerExport } from '@/lib/api';
 import { CaptionOverlay } from '@/components/CaptionOverlay';
@@ -67,12 +69,12 @@ const CaptionedVideo = forwardRef<
     onPlayingChange?: (isPlaying: boolean) => void;
     onDurationChange?: (duration: number) => void;
     onBack?: () => void;
-    onExport?: () => void;
-    exporting?: boolean;
-    hasExport?: boolean;
+    compact?: boolean;
+    onToggleCompact?: () => void;
+    topInset?: number;
   }
 >(function CaptionedVideo(
-  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack, onExport, exporting, hasExport },
+  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack, compact, onToggleCompact, topInset = 0 },
   ref,
 ) {
   const player = useVideoPlayer(url, (p) => {
@@ -114,6 +116,7 @@ const CaptionedVideo = forwardRef<
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoDuration, setVideoDuration] = useState(0);
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -123,6 +126,10 @@ const CaptionedVideo = forwardRef<
       onDurationChange?.(player.duration);
     }
   }) as any);
+
+  (useEventListener as any)(player, 'videoSizeChange', ({ width, height }: { width: number; height: number }) => {
+    if (width > 0 && height > 0) setNaturalSize({ width, height });
+  });
 
   useEventListener(player, 'playingChange', ({ isPlaying: playing }) => {
     setIsPlaying(playing);
@@ -140,6 +147,10 @@ const CaptionedVideo = forwardRef<
   }, []);
 
   const handleTap = () => {
+    if (compact) {
+      onToggleCompact?.();
+      return;
+    }
     setShowControls(true);
     scheduleHide();
     togglePlay();
@@ -153,14 +164,52 @@ const CaptionedVideo = forwardRef<
     }
   };
 
+  const screenWidth = Dimensions.get('window').width;
+  const screenHeight = Dimensions.get('window').height;
+  // Leave ~260px for CaptionEditor content + toolbar; subtract topInset since screen is padded
+  const compactHeight = screenHeight - topInset - 260;
+  const containerHeight = naturalSize
+    ? screenWidth * (naturalSize.height / naturalSize.width)
+    : screenWidth * (16 / 9);
+
+  const animatedHeight = useRef(new Animated.Value(screenWidth * (16 / 9))).current;
+
+  useEffect(() => {
+    if (!compact) {
+      animatedHeight.setValue(containerHeight);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [naturalSize?.width, naturalSize?.height]);
+
+  useEffect(() => {
+    Animated.timing(animatedHeight, {
+      toValue: compact ? compactHeight : containerHeight,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compact]);
+
+  // Calculate letterbox insets so the overlay stays within the actual video frame
+  const currentH = compact ? compactHeight : containerHeight;
+  const videoAspect = naturalSize ? naturalSize.width / naturalSize.height : 9 / 16;
+  const containerAspect = screenWidth / currentH;
+  let overlayInsetX = 0;
+  let overlayInsetY = 0;
+  if (containerAspect > videoAspect) {
+    overlayInsetX = (screenWidth - currentH * videoAspect) / 2;
+  } else {
+    overlayInsetY = (currentH - screenWidth / videoAspect) / 2;
+  }
+
   const videoContent = (fullscreen: boolean) => (
-    <View
+    <Animated.View
       className={
         fullscreen ? 'flex-1 bg-black' : 'w-full overflow-hidden bg-background'
       }
       style={
         !fullscreen
-          ? { height: Dimensions.get('window').height * 0.65 }
+          ? { height: animatedHeight }
           : undefined
       }
     >
@@ -195,29 +244,19 @@ const CaptionedVideo = forwardRef<
           currentTime={currentTime}
           captionData={captionData}
           captionStyle={captionStyle ? getCaptionStyle(captionStyle) : undefined}
+          scale={compact ? compactHeight / containerHeight : 1}
+          insetX={overlayInsetX}
+          insetY={overlayInsetY}
         />
       )}
 
       {/* Back button at top-left */}
       {!fullscreen && onBack && (
         <TouchableOpacity
-          className="absolute left-3 top-[50px] h-9 w-9 items-center justify-center rounded-full bg-primary"
+          className="absolute left-3 top-3 h-9 w-9 items-center justify-center rounded-full bg-primary"
           onPress={onBack}
         >
           <ArrowLeft size={18} className="text-primary-foreground" />
-        </TouchableOpacity>
-      )}
-
-      {/* Re-export button at top-right, aligned with back button */}
-      {!fullscreen && onExport && (
-        <TouchableOpacity
-          className={`absolute right-3 top-[50px] rounded-full bg-primary px-3 py-2 ${exporting ? 'opacity-50' : ''}`}
-          onPress={onExport}
-          disabled={exporting}
-        >
-          <Text className="text-xs font-semibold text-primary-foreground">
-            {exporting ? 'Exporting…' : hasExport ? 'Re-export' : 'Export'}
-          </Text>
         </TouchableOpacity>
       )}
 
@@ -238,21 +277,16 @@ const CaptionedVideo = forwardRef<
         </View>
       )}
 
-      {(!fullscreen || showControls) && (
+      {/* Fullscreen exit button — only shown when in fullscreen */}
+      {fullscreen && showControls && (
         <TouchableOpacity
-          className={`absolute items-center justify-center rounded-full bg-overlay ${
-            fullscreen ? 'right-4 top-[50px] h-9 w-9' : 'right-2 top-2 h-8 w-8'
-          }`}
+          className="absolute right-4 top-[50px] h-9 w-9 items-center justify-center rounded-full bg-overlay"
           onPress={() => setIsFullscreen((f) => !f)}
         >
-          {fullscreen ? (
-            <X size={18} className="text-foreground" />
-          ) : (
-            <Maximize size={18} className="text-foreground" />
-          )}
+          <X size={18} className="text-foreground" />
         </TouchableOpacity>
       )}
-    </View>
+    </Animated.View>
   );
 
   return (
@@ -303,6 +337,7 @@ function StatusSkeleton() {
 }
 
 export default function StatusScreen() {
+  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const primaryColor = THEME_COLORS[colorScheme === 'dark' ? 'dark' : 'light'].primary;
   const { videoId } = useLocalSearchParams<{ videoId: string }>();
@@ -321,6 +356,10 @@ export default function StatusScreen() {
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [startingTranscription, setStartingTranscription] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<CaptionStyleId>('classic');
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [exportSheetOpen, setExportSheetOpen] = useState(false);
+  const [viewsSheetOpen, setViewsSheetOpen] = useState(false);
+  const [stylesSheetOpen, setStylesSheetOpen] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<CaptionedVideoHandle>(null);
 
@@ -595,7 +634,7 @@ export default function StatusScreen() {
 
   // "transcribed" or "completed" — show captioned video
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
       {/* Video pinned at top */}
       {rawUrl && (
         <CaptionedVideo
@@ -606,77 +645,147 @@ export default function StatusScreen() {
           onTimeUpdate={handleTimeUpdate}
           onDurationChange={handleDurationChange}
           onBack={() => router.back()}
-          onExport={handleExport}
-          exporting={exporting}
-          hasExport={!!processedUrl}
+          compact={isEditMode}
+          onToggleCompact={() => setIsEditMode(false)}
+          topInset={insets.top}
         />
       )}
 
-      {/* Toggle pill — only when export is available */}
-      {status === 'completed' && processedUrl && (
-        <View className="flex-row mx-5 mt-3 mb-1 rounded-xl bg-secondary p-1">
-          <TouchableOpacity
-            className={`flex-1 items-center rounded-lg py-2 ${!showExported ? 'bg-background' : ''}`}
-            onPress={() => setShowExported(false)}
-          >
-            <Text className={`text-sm font-medium ${!showExported ? 'text-foreground' : 'text-muted-foreground'}`}>
-              Preview
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className={`flex-1 items-center rounded-lg py-2 ${showExported ? 'bg-background' : ''}`}
-            onPress={() => setShowExported(true)}
-          >
-            <Text className={`text-sm font-medium ${showExported ? 'text-foreground' : 'text-muted-foreground'}`}>
-              Exported
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Middle area always fills remaining space so toolbar stays at bottom */}
+      <View className="flex-1">
+        {isEditMode && !showExported && captionData && session && (
+          <CaptionEditor
+            captionData={captionData}
+            currentTime={currentTime}
+            duration={videoDuration}
+            videoId={videoId!}
+            accessToken={session.access_token}
+            onCaptionDataChange={setCaptionData}
+            onSeekTo={handleSeekTo}
+            onPause={handlePause}
+          />
+        )}
+      </View>
 
-      {/* Style picker */}
-      {!showExported && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="h-14 flex-none"
-          contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 8, alignItems: 'center' }}
+      {/* Bottom toolbar */}
+      <View
+        className="flex-row items-center justify-center gap-4 border-t border-border bg-background"
+        style={{ paddingTop: 10, paddingBottom: 10 }}
+      >
+        <TouchableOpacity
+          className="h-12 w-12 items-center justify-center rounded-full bg-secondary"
+          onPress={() => setViewsSheetOpen(true)}
         >
-          {CAPTION_STYLES.map((s) => (
-            <TouchableOpacity
-              key={s.id}
-              onPress={() => setSelectedStyle(s.id)}
-              className={`rounded-xl px-5 py-2.5 ${
-                selectedStyle === s.id
-                  ? 'bg-primary'
-                  : 'border border-border bg-secondary'
-              }`}
-            >
-              <Text
-                className={`text-sm font-medium ${
-                  selectedStyle === s.id ? 'text-primary-foreground' : 'text-muted-foreground'
-                }`}
-              >
-                {s.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
+          <Eye size={20} className="text-foreground" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          className={`h-12 w-12 items-center justify-center rounded-full ${isEditMode ? 'bg-primary' : 'bg-secondary'}`}
+          onPress={() => setIsEditMode((e) => !e)}
+        >
+          <PenLine size={20} className={isEditMode ? 'text-primary-foreground' : 'text-foreground'} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          className="h-12 w-12 items-center justify-center rounded-full bg-secondary"
+          onPress={() => setStylesSheetOpen(true)}
+        >
+          <Palette size={20} className="text-foreground" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          className="h-12 w-12 items-center justify-center rounded-full bg-secondary"
+          onPress={() => setExportSheetOpen(true)}
+        >
+          <Download size={20} className="text-foreground" />
+        </TouchableOpacity>
+      </View>
 
-      {/* Caption editor fills remaining space */}
-      {!showExported && captionData && session && (
-        <CaptionEditor
-          captionData={captionData}
-          currentTime={currentTime}
-          duration={videoDuration}
-          videoId={videoId!}
-          accessToken={session.access_token}
-          onCaptionDataChange={setCaptionData}
-          onSeekTo={handleSeekTo}
-          onPause={handlePause}
-        />
-      )}
+      {/* Views sheet */}
+      <BottomSheet
+        visible={viewsSheetOpen}
+        onClose={() => setViewsSheetOpen(false)}
+        title="View"
+      >
+        <TouchableOpacity
+          className="flex-row items-center justify-between rounded-xl bg-secondary px-4 py-4 mb-2"
+          onPress={() => { setShowExported(false); setViewsSheetOpen(false); }}
+        >
+          <Text className="text-base font-medium text-foreground">Preview</Text>
+          {!showExported && (
+            <View className="h-5 w-5 items-center justify-center rounded-full bg-primary">
+              <Text className="text-xs text-primary-foreground">✓</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          className={`flex-row items-center justify-between rounded-xl bg-secondary px-4 py-4 ${!processedUrl ? 'opacity-40' : ''}`}
+          onPress={() => {
+            if (!processedUrl) return;
+            setShowExported(true);
+            setViewsSheetOpen(false);
+          }}
+          disabled={!processedUrl}
+        >
+          <Text className="text-base font-medium text-foreground">Exported</Text>
+          {showExported && (
+            <View className="h-5 w-5 items-center justify-center rounded-full bg-primary">
+              <Text className="text-xs text-primary-foreground">✓</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </BottomSheet>
+
+      {/* Styles sheet */}
+      <BottomSheet
+        visible={stylesSheetOpen}
+        onClose={() => setStylesSheetOpen(false)}
+        title="Caption Style"
+      >
+        {CAPTION_STYLES.map((s) => (
+          <TouchableOpacity
+            key={s.id}
+            className="flex-row items-center justify-between rounded-xl bg-secondary px-4 py-4 mb-2"
+            onPress={() => { setSelectedStyle(s.id); setStylesSheetOpen(false); }}
+          >
+            <View className="flex-row items-center gap-3">
+              <View
+                className="h-5 w-5 rounded-full border-2 border-border"
+                style={{ backgroundColor: s.activeWordColor }}
+              />
+              <Text className="text-base font-medium text-foreground">{s.label}</Text>
+            </View>
+            {selectedStyle === s.id && (
+              <View className="h-5 w-5 items-center justify-center rounded-full bg-primary">
+                <Text className="text-xs text-primary-foreground">✓</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
+      </BottomSheet>
+
+      {/* Export confirmation sheet */}
+      <BottomSheet
+        visible={exportSheetOpen}
+        onClose={() => setExportSheetOpen(false)}
+        title={processedUrl ? 'Re-export Video' : 'Export Video'}
+      >
+        <View className="flex-row items-center gap-3 rounded-xl bg-secondary px-4 py-4 mb-4">
+          <View
+            className="h-5 w-5 rounded-full border-2 border-border"
+            style={{ backgroundColor: getCaptionStyle(selectedStyle).activeWordColor }}
+          />
+          <Text className="text-base text-foreground">
+            Style: <Text className="font-semibold">{getCaptionStyle(selectedStyle).label}</Text>
+          </Text>
+        </View>
+        <TouchableOpacity
+          className={`items-center rounded-xl bg-primary py-4 ${exporting ? 'opacity-50' : ''}`}
+          onPress={() => { handleExport(); setExportSheetOpen(false); }}
+          disabled={exporting}
+        >
+          <Text className="text-base font-semibold text-primary-foreground">
+            {exporting ? 'Exporting…' : processedUrl ? 'Re-export' : 'Export'}
+          </Text>
+        </TouchableOpacity>
+      </BottomSheet>
 
     </View>
   );

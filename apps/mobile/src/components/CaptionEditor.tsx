@@ -391,7 +391,8 @@ export function CaptionEditor({
   const submitOverlayModal = async () => {
     if (!overlayModal) return;
     const { mode, text, startText, endText } = overlayModal;
-    const overlayId = overlayModal.mode === 'edit' ? overlayModal.overlayId : undefined;
+    const overlayId =
+      overlayModal.mode === 'edit' ? overlayModal.overlayId : undefined;
 
     if (!text.trim()) {
       Alert.alert('Error', 'Text cannot be empty.');
@@ -505,7 +506,7 @@ export function CaptionEditor({
   }
 
   return (
-    <View className="flex-1 p-4">
+    <View className="flex-1 p-2">
       {/* Time label row */}
       <View className="mb-2 flex-row items-center justify-between">
         <Text className="text-sm font-semibold text-muted-foreground">
@@ -534,7 +535,12 @@ export function CaptionEditor({
             <View className="min-h-[40px] flex-row items-center">
               {/* Leading spacer: silence before the first word */}
               {flatWords.length > 0 && flatWords[0].start > 0 && (
-                <View style={{ width: flatWords[0].start * PX_PER_SECOND, alignSelf: 'stretch' }} />
+                <View
+                  style={{
+                    width: flatWords[0].start * PX_PER_SECOND,
+                    alignSelf: 'stretch',
+                  }}
+                />
               )}
               {flatWords.map((fw, idx) => (
                 <React.Fragment key={fw.flatIndex}>
@@ -547,7 +553,11 @@ export function CaptionEditor({
                       'rounded bg-black/[0.05] dark:bg-white/[0.08] px-1.5 py-1',
                       activeWordIndex === fw.flatIndex && 'bg-primary',
                     )}
-                    style={{ minWidth: Math.min(fw.end - fw.start, MAX_WORD_DURATION_S) * PX_PER_SECOND }}
+                    style={{
+                      minWidth:
+                        Math.min(fw.end - fw.start, MAX_WORD_DURATION_S) *
+                        PX_PER_SECOND,
+                    }}
                   >
                     <Text
                       className={cn(
@@ -577,7 +587,8 @@ export function CaptionEditor({
                 {sortedOverlays.map((overlay) => {
                   const isActive =
                     currentTime >= overlay.start && currentTime <= overlay.end;
-                  const startX = timeToX(overlay.start) ?? getOverlayLeftPos(overlay);
+                  const startX =
+                    timeToX(overlay.start) ?? getOverlayLeftPos(overlay);
                   const endX = timeToX(overlay.end) ?? startX;
                   const chipWidth = Math.max(endX - startX, 0);
                   return (
