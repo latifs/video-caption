@@ -72,9 +72,10 @@ const CaptionedVideo = forwardRef<
     compact?: boolean;
     onToggleCompact?: () => void;
     topInset?: number;
+    bottomInset?: number;
   }
 >(function CaptionedVideo(
-  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack, compact, onToggleCompact, topInset = 0 },
+  { url, captionData, captionStyle, onTimeUpdate, onPlayingChange, onDurationChange, onBack, compact, onToggleCompact, topInset = 0, bottomInset = 0 },
   ref,
 ) {
   const player = useVideoPlayer(url, (p) => {
@@ -166,11 +167,11 @@ const CaptionedVideo = forwardRef<
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
-  // Leave ~260px for CaptionEditor content + toolbar; subtract topInset since screen is padded
-  const compactHeight = screenHeight - topInset - 260;
   const containerHeight = naturalSize
     ? screenWidth * (naturalSize.height / naturalSize.width)
     : screenWidth * (16 / 9);
+  // Clamp so compact mode never exceeds the natural height (e.g. landscape videos)
+  const compactHeight = Math.min(screenHeight - topInset - bottomInset - 260, containerHeight);
 
   const animatedHeight = useRef(new Animated.Value(screenWidth * (16 / 9))).current;
 
@@ -253,7 +254,8 @@ const CaptionedVideo = forwardRef<
       {/* Back button at top-left */}
       {!fullscreen && onBack && (
         <TouchableOpacity
-          className="absolute left-3 top-3 h-9 w-9 items-center justify-center rounded-full bg-primary"
+          className="absolute left-3 h-9 w-9 items-center justify-center rounded-full bg-primary"
+          style={{ top: topInset + 12 }}
           onPress={onBack}
         >
           <ArrowLeft size={18} className="text-primary-foreground" />
@@ -490,7 +492,7 @@ export default function StatusScreen() {
 
   if (status === 'uploaded') {
     return (
-      <View className="flex-1 bg-background">
+      <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         {/* Video preview (same player as transcribed, no captions) */}
         {rawUrl && (
           <CaptionedVideo
@@ -499,6 +501,7 @@ export default function StatusScreen() {
             onTimeUpdate={handleTimeUpdate}
             onDurationChange={handleDurationChange}
             onBack={() => router.back()}
+            topInset={insets.top}
           />
         )}
 
@@ -648,6 +651,7 @@ export default function StatusScreen() {
           compact={isEditMode}
           onToggleCompact={() => setIsEditMode(false)}
           topInset={insets.top}
+          bottomInset={insets.bottom}
         />
       )}
 
@@ -670,7 +674,7 @@ export default function StatusScreen() {
       {/* Bottom toolbar */}
       <View
         className="flex-row items-center justify-center gap-4 border-t border-border bg-background"
-        style={{ paddingTop: 10, paddingBottom: 10 }}
+        style={{ paddingTop: 10, paddingBottom: insets.bottom + 10 }}
       >
         <TouchableOpacity
           className="h-12 w-12 items-center justify-center rounded-full bg-secondary"

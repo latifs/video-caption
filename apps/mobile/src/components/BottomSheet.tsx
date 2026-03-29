@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import { View, Text, Modal, Pressable } from 'react-native';
+import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
+import { View, Text, Modal, Pressable, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -7,27 +8,37 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import { X } from '@/lib/icons';
-import { TouchableOpacity } from 'react-native';
 
 interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function BottomSheet({ visible, onClose, title, children }: BottomSheetProps) {
   const anim = useSharedValue(0);
+  const closing = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (visible) {
+      closing.current = false;
       anim.value = withTiming(1, { duration: 300 });
     }
   }, [visible, anim]);
 
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
+
   const animateOut = () => {
+    if (closing.current) return;
+    closing.current = true;
     anim.value = withTiming(0, { duration: 250 });
-    setTimeout(onClose, 250);
+    timer.current = setTimeout(onClose, 250);
   };
 
   const backdropStyle = useAnimatedStyle(() => ({
