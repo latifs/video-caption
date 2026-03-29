@@ -61,11 +61,19 @@ export function burnCaptionFrames(
     const args = [
       "-i", inputVideoPath,
       "-f", "concat", "-safe", "0", "-i", concatListPath,
-      "-filter_complex", "[1:v]format=rgba[cap];[0:v][cap]overlay=eof_action=pass[out]",
+      "-filter_complex",
+        "[1:v]format=rgba[cap];" +
+        "[0:v][cap]overlay=eof_action=pass[overlaid];" +
+        "[overlaid]scale=1080:1920:force_original_aspect_ratio=decrease," +
+        "pad=1080:1920:(ow-iw)/2:(oh-ih)/2[out]",
       "-map", "[out]",
       "-map", "0:a?",
       "-c:v", "libx264",
-      "-c:a", "copy",
+      "-b:v", "10M",
+      "-r", "30",
+      "-c:a", "aac",
+      "-ar", "44100",
+      "-b:a", "192k",
       "-y",
       outputPath,
     ];
