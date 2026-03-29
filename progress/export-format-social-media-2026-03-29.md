@@ -30,6 +30,7 @@ Updated the worker's video export pipeline to output a universal format that wor
 | Audio codec | AAC |
 | Audio sample rate | 44.1 kHz |
 | Audio bitrate | 192k |
+| Pixel format | yuv420p (4:2:0) |
 
 Non-9:16 source videos are scaled down to fit within 1080×1920 (aspect ratio preserved) and padded with black bars to fill the frame — standard behaviour on all target platforms.
 
@@ -54,5 +55,5 @@ Filter chain:
 [1:v]format=rgba[cap];
 [0:v][cap]overlay=eof_action=pass[overlaid];
 [overlaid]scale=1080:1920:force_original_aspect_ratio=decrease,
-           pad=1080:1920:(ow-iw)/2:(oh-ih)/2[out]
+           pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1[out]
 ```
