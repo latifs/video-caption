@@ -58,12 +58,20 @@ interface CaptionOverlayProps {
   currentTime: number;
   captionData: CaptionData;
   captionStyle?: CaptionStyleDef;
+  scale?: number;
+  /** Horizontal inset (px) on each side where the video has letterbox bars */
+  insetX?: number;
+  /** Vertical inset (px) on each side where the video has letterbox bars */
+  insetY?: number;
 }
 
 export function CaptionOverlay({
   currentTime,
   captionData,
   captionStyle,
+  scale = 1,
+  insetX = 0,
+  insetY = 0,
 }: CaptionOverlayProps) {
   const style = captionStyle ?? getCaptionStyle('classic');
   const activeSegment = findActiveSegment(
@@ -83,7 +91,10 @@ export function CaptionOverlay({
     : -1;
 
   return (
-    <View className="absolute inset-0" pointerEvents="none">
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', left: insetX, right: insetX, top: insetY, bottom: insetY }}
+    >
       {/* Speech captions */}
       {activeSegment && visibleWords.length > 0 && (
         <View className="absolute bottom-[10%] left-4 right-4 items-center">
@@ -92,7 +103,7 @@ export function CaptionOverlay({
               className="rounded px-3 py-1.5"
               style={{ backgroundColor: style.backgroundColor }}
             >
-              <Text className="text-center text-base" style={{ color: style.textColor, fontWeight: style.fontWeight }}>
+              <Text className="text-center" style={{ fontSize: 16 * scale, color: style.textColor, fontWeight: style.fontWeight }}>
                 {visibleWords.map((word, i) => (
                   <Text
                     key={`${word.start}-${i}`}
@@ -106,8 +117,9 @@ export function CaptionOverlay({
             </View>
           ) : (
             <Text
-              className="text-center text-base"
+              className="text-center"
               style={{
+                fontSize: 16 * scale,
                 color: style.textColor,
                 fontWeight: style.fontWeight,
                 ...(style.textShadow && {
@@ -167,7 +179,7 @@ export function CaptionOverlay({
           <Text
             className="px-2 py-1 text-center"
             style={{
-              fontSize: overlay.style.fontSize,
+              fontSize: overlay.style.fontSize * scale,
               color: overlay.style.color,
             }}
           >
