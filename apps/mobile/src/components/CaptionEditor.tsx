@@ -258,7 +258,7 @@ export function CaptionEditor({
       const pos = wordPositions.current.get(activeWordIndex);
       if (pos) {
         scrollViewRef.current?.scrollTo({
-          x: Math.max(0, pos.x + pos.width / 2),
+          x: Math.max(0, pos.x + pos.width / 2 - halfWidth),
           animated: true,
         });
         return;
@@ -268,7 +268,7 @@ export function CaptionEditor({
     const targetX = timeToX(currentTime);
     if (targetX != null) {
       scrollViewRef.current?.scrollTo({
-        x: Math.max(0, targetX),
+        x: Math.max(0, targetX - halfWidth),
         animated: true,
       });
     }
@@ -283,7 +283,7 @@ export function CaptionEditor({
       if (now - lastSeekTime.current < 50) return;
       lastSeekTime.current = now;
 
-      const time = xToTime(offsetX);
+      const time = xToTime(offsetX + halfWidth);
       if (time != null) {
         onSeekTo(time);
       }
@@ -319,7 +319,7 @@ export function CaptionEditor({
     if (pos) {
       const targetX = pos.x + pos.width / 2;
       scrollViewRef.current?.scrollTo({
-        x: Math.max(0, targetX),
+        x: Math.max(0, targetX - halfWidth),
         animated: true,
       });
     }
@@ -523,7 +523,7 @@ export function CaptionEditor({
           ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: halfWidth }}
+          contentContainerStyle={{ paddingRight: halfWidth }}
           onScroll={handleScroll}
           onScrollBeginDrag={handleScrollBeginDrag}
           onScrollEndDrag={handleScrollEnd}

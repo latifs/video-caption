@@ -22,9 +22,11 @@ import { Menu } from '@/lib/icons';
 import { useAuth } from '@/lib/auth';
 import { listVideos, createVideo } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
+import { useSubscription } from '@/hooks/useSubscription';
 import { VideoListItem } from '@/components/home/VideoListItem';
 import { AddVideoSheet } from '@/components/home/AddVideoSheet';
 import { SideMenu } from '@/components/home/SideMenu';
+import { PaywallModal } from '@/components/paywall/PaywallModal';
 
 const DRAWER_WIDTH = 280;
 
@@ -39,9 +41,11 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const { user, session, signOut } = useAuth();
   const router = useRouter();
-  const [videos, setVideos] = useState<VideoRow[]>([]);
+  const [videos, setVideos] = useState<VideoRow[] | null>(null);
   const [showAddSheet, setShowAddSheet] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const { isSubscribed, status: subscriptionStatus } = useSubscription(session);
   const menuAnim = useSharedValue(0);
   const [uploading, setUploading] = useState(false);
   const closeMenuTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -178,13 +182,13 @@ export default function HomeScreen() {
       <View className="mb-3 flex-row items-center justify-between px-5">
         <Text className="text-lg font-semibold text-foreground">Videos</Text>
         <Text className="text-xs text-muted-foreground">
-          {videos.length} {videos.length === 1 ? 'video' : 'videos'}
+          {videos === null ? '' : `${videos.length} ${videos.length === 1 ? 'video' : 'videos'}`}
         </Text>
       </View>
 
       {/* Video list */}
       <FlatList
-        data={videos}
+        data={videos ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
@@ -219,8 +223,15 @@ export default function HomeScreen() {
       <View className="absolute inset-x-0 bottom-0 border-t border-t-border bg-background px-5 pb-9 pt-3">
         <TouchableOpacity
           className="items-center rounded-xl bg-primary py-4"
-          onPress={() => setShowAddSheet(true)}
-          disabled={uploading}
+          onPress={() => {
+            if (videos === null || subscriptionStatus === 'loading') return;
+            if (videos.length >= 1 && !isSubscribed) {
+              setShowPaywall(true);
+            } else {
+              setShowAddSheet(true);
+            }
+          }}
+          disabled={uploading || videos === null || subscriptionStatus === 'loading'}
         >
           <Text className="text-lg font-semibold text-primary-foreground">
             Add New Video
@@ -234,6 +245,11 @@ export default function HomeScreen() {
         onDismiss={handleSheetDismiss}
         onPhotosPress={() => handleChooseAction('photos')}
         onCameraPress={() => handleChooseAction('camera')}
+      />
+
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
       />
 
       <SideMenu
