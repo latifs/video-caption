@@ -135,3 +135,19 @@ export async function triggerExport(
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 }
+
+export interface MeResponse {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  revenueCatId: string | null;
+  subscriptionStatus: string | null;
+  subscriptionExpiresAt: string | null;
+}
+
+export async function getMe(accessToken: string): Promise<MeResponse> {
+  const { data } = await axios.get(`${API_URL}/api/me`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return data;
+}

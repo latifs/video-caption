@@ -673,32 +673,44 @@ export default function StatusScreen() {
 
       {/* Bottom toolbar */}
       <View
-        className="flex-row items-center justify-center gap-4 border-t border-border bg-background"
+        className="flex-row items-center border-t border-border bg-background"
         style={{ paddingTop: 10, paddingBottom: insets.bottom + 10 }}
       >
         <TouchableOpacity
-          className="h-12 w-12 items-center justify-center rounded-full bg-secondary"
+          className="flex-1 items-center gap-1"
           onPress={() => setViewsSheetOpen(true)}
         >
-          <Eye size={20} className="text-foreground" />
+          <View className="h-12 w-12 items-center justify-center rounded-full bg-secondary">
+            <Eye size={20} className="text-foreground" />
+          </View>
+          <Text className="text-xs text-muted-foreground">Preview</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          className={`h-12 w-12 items-center justify-center rounded-full ${isEditMode ? 'bg-primary' : 'bg-secondary'}`}
+          className="flex-1 items-center gap-1"
           onPress={() => setIsEditMode((e) => !e)}
         >
-          <PenLine size={20} className={isEditMode ? 'text-primary-foreground' : 'text-foreground'} />
+          <View className={`h-12 w-12 items-center justify-center rounded-full ${isEditMode ? 'bg-primary' : 'bg-secondary'}`}>
+            <PenLine size={20} className={isEditMode ? 'text-primary-foreground' : 'text-foreground'} />
+          </View>
+          <Text className="text-xs text-muted-foreground">Edit Captions</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          className="h-12 w-12 items-center justify-center rounded-full bg-secondary"
+          className="flex-1 items-center gap-1"
           onPress={() => setStylesSheetOpen(true)}
         >
-          <Palette size={20} className="text-foreground" />
+          <View className="h-12 w-12 items-center justify-center rounded-full bg-secondary">
+            <Palette size={20} className="text-foreground" />
+          </View>
+          <Text className="text-xs text-muted-foreground">Caption Style</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          className="h-12 w-12 items-center justify-center rounded-full bg-secondary"
+          className="flex-1 items-center gap-1"
           onPress={() => setExportSheetOpen(true)}
         >
-          <Download size={20} className="text-foreground" />
+          <View className="h-12 w-12 items-center justify-center rounded-full bg-secondary">
+            <Download size={20} className="text-foreground" />
+          </View>
+          <Text className="text-xs text-muted-foreground">Export Video</Text>
         </TouchableOpacity>
       </View>
 

@@ -1,6 +1,7 @@
 import { cssInterop } from "nativewind";
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   Download,
   Eye,
@@ -11,6 +12,7 @@ import {
   Pause,
   PenLine,
   Play,
+  Star,
   Sun,
   X,
 } from "lucide-react-native";
@@ -29,6 +31,7 @@ function iconWithClassName(icon: ComponentType<any>) {
 }
 
 iconWithClassName(ArrowLeft);
+iconWithClassName(Check);
 iconWithClassName(ChevronDown);
 iconWithClassName(Download);
 iconWithClassName(Eye);
@@ -39,7 +42,8 @@ iconWithClassName(Palette);
 iconWithClassName(Pause);
 iconWithClassName(PenLine);
 iconWithClassName(Play);
+iconWithClassName(Star);
 iconWithClassName(Sun);
 iconWithClassName(X);
 
-export { ArrowLeft, ChevronDown, Download, Eye, Maximize, Menu, Moon, Palette, Pause, PenLine, Play, Sun, X };
+export { ArrowLeft, Check, ChevronDown, Download, Eye, Maximize, Menu, Moon, Palette, Pause, PenLine, Play, Star, Sun, X };
