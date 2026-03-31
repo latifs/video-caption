@@ -22,7 +22,9 @@ export function useSubscription(session: Session | null): UseSubscriptionResult 
       const me = await getMe(session.access_token);
       setStatus(me.subscriptionStatus === 'active' ? 'active' : 'free');
     } catch {
-      // Fail open: network errors never block a real subscriber
+      // On network/API errors, default to free so the app remains usable.
+      // A paying subscriber may briefly see the paywall — acceptable tradeoff
+      // vs. blocking all users when the API is down.
       setStatus('free');
     }
   }, [session]);

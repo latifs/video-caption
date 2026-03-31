@@ -57,6 +57,27 @@ export async function POST(request: Request) {
   const { videoId, rawUrl } = parsed.data;
 
   try {
+    // Enforce the free tier limit server-side (1 video for unsubscribed users).
+    // This runs before the insert so the check and create are in the same
+    // round-trip; a race between two concurrent requests is acceptable —
+    // both would pass the count check and create their videos, which is a
+    // minor edge case we can tighten once real subscription enforcement is live.
+    const [videoCount, dbUser] = await Promise.all([
+      prisma.video.count({ where: { userId: user.id } }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { subscriptionStatus: true },
+      }),
+    ]);
+
+    const isSubscribed = dbUser?.subscriptionStatus === "active";
+    if (videoCount >= 1 && !isSubscribed) {
+      return NextResponse.json(
+        { error: "Subscription required to upload additional videos" },
+        { status: 403 }
+      );
+    }
+
     const video = await prisma.video.create({
       data: {
         id: videoId,

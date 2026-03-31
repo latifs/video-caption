@@ -38,6 +38,8 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
   useEffect(() => {
     if (visible) {
       anim.value = withTiming(1, { duration: 300 });
+    } else {
+      anim.value = 0;
     }
   }, [visible, anim]);
 

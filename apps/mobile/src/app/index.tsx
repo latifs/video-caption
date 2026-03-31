@@ -41,7 +41,7 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const { user, session, signOut } = useAuth();
   const router = useRouter();
-  const [videos, setVideos] = useState<VideoRow[]>([]);
+  const [videos, setVideos] = useState<VideoRow[] | null>(null);
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -182,13 +182,13 @@ export default function HomeScreen() {
       <View className="mb-3 flex-row items-center justify-between px-5">
         <Text className="text-lg font-semibold text-foreground">Videos</Text>
         <Text className="text-xs text-muted-foreground">
-          {videos.length} {videos.length === 1 ? 'video' : 'videos'}
+          {videos === null ? '' : `${videos.length} ${videos.length === 1 ? 'video' : 'videos'}`}
         </Text>
       </View>
 
       {/* Video list */}
       <FlatList
-        data={videos}
+        data={videos ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
@@ -224,14 +224,14 @@ export default function HomeScreen() {
         <TouchableOpacity
           className="items-center rounded-xl bg-primary py-4"
           onPress={() => {
-            if (subscriptionStatus === 'loading') return;
+            if (videos === null || subscriptionStatus === 'loading') return;
             if (videos.length >= 1 && !isSubscribed) {
               setShowPaywall(true);
             } else {
               setShowAddSheet(true);
             }
           }}
-          disabled={uploading || subscriptionStatus === 'loading'}
+          disabled={uploading || videos === null || subscriptionStatus === 'loading'}
         >
           <Text className="text-lg font-semibold text-primary-foreground">
             Add New Video
